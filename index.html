@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Roost — the flock, the feed, the figures</title>
+<meta name="description" content="Roost is flock management for small family-run poultry farms. Daily checks, feed and bag planning, processing yields and a cycle P&amp;L that tells you where you stand on day 19, not day 42.">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%231a7f37'/%3E%3Cellipse cx='46' cy='60' rx='26' ry='22' fill='%23fff'/%3E%3Ccircle cx='66' cy='38' r='14' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/styles.css">
+<noscript>
+  <!-- Reveal animations hide their content until JS shows it. With no JS there is
+       nothing to show it, so the whole page stays visible instead. -->
+  <style>
+    [data-reveal] { opacity: 1 !important; transform: none !important; filter: none !important; }
+  </style>
+</noscript>
+<script src="assets/theme-init.js"></script>
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<!-- ========================= NAV ========================= -->
+<header class="nav" data-nav>
+  <div class="nav__inner">
+    <a class="brand" href="#top">
+      <svg class="brand__mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <ellipse cx="10.5" cy="14.5" rx="6.5" ry="5.5"/>
+        <circle cx="15.5" cy="8.5" r="3.6"/>
+        <path d="M18.6 7.6 22.5 9l-3.9 1.4z"/>
+      </svg>
+      Roost
+    </a>
+
+    <nav class="nav__links" aria-label="Primary">
+      <a href="#cycle">The cycle</a>
+      <a href="#capabilities">Capabilities</a>
+      <a href="#parts">Yield</a>
+      <a href="#figures">Figures</a>
+      <a href="#roadmap">Roadmap</a>
+    </nav>
+
+    <div class="nav__actions">
+      <button class="icon-btn" id="themeToggle" type="button" data-press aria-label="Switch appearance" aria-pressed="false">
+        <svg class="sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg>
+        <svg class="moon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+      </button>
+      <a class="btn btn--primary nav__cta" href="#start" data-press>Start a cycle</a>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ========================= HERO ========================= -->
+<section class="hero wrap" id="top" data-tilt-scope>
+  <p class="eyebrow" data-reveal>Roost</p>
+  <h1 class="display" data-reveal data-reveal-delay="60">The flock, the feed,<br>the figures.</h1>
+  <p class="subhead" data-reveal data-reveal-delay="120">
+    Forty-two days decide whether a cycle pays. Roost follows every one of them —
+    then tells you, on day nineteen, what your spreadsheet only admits on day forty-two.
+  </p>
+
+  <div class="hero__actions" data-reveal data-reveal-delay="180">
+    <a class="btn btn--primary" href="#start" data-press>Start your first cycle</a>
+    <a class="btn btn--quiet" href="#cycle" data-press>
+      Watch a cycle run
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </a>
+  </div>
+
+  <div class="hero__stage" data-reveal data-reveal-delay="240">
+    <div class="glass-card" data-tilt role="figure" aria-label="Demo dashboard for cycle 12, day 38 of 42">
+      <div class="glass-card__bar">
+        <div style="text-align:left">
+          <div style="font-weight:600;letter-spacing:-.016em">Cycle 12 · House A</div>
+          <div class="caption">1,500 placed · Ross 308 · day 38 of 42</div>
+        </div>
+        <span class="badge">Margin at risk</span>
+      </div>
+
+      <div class="glass-card__body">
+        <div class="metrics">
+          <div class="metric">
+            <div class="metric__k">Birds alive</div>
+            <div class="metric__v tnum"><span data-count="1432">0</span></div>
+          </div>
+          <div class="metric">
+            <div class="metric__k">Mortality</div>
+            <div class="metric__v tnum"><span data-count="4.5" data-decimals="1">0</span><small>%</small></div>
+          </div>
+          <div class="metric">
+            <div class="metric__k">Bags used</div>
+            <div class="metric__v tnum"><span data-count="198">0</span><small>/226</small></div>
+          </div>
+          <div class="metric">
+            <div class="metric__k">Feed conversion</div>
+            <div class="metric__v tnum"><span data-count="1.90" data-decimals="2">0</span></div>
+          </div>
+        </div>
+
+        <div class="note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4.5M12 17h.01"/><circle cx="12" cy="12" r="9.5"/></svg>
+          <div>
+            Breakeven is <strong>$3.52 a pound</strong>. You are selling at <strong>$3.32</strong>.
+            This cycle finishes about <strong>$1,110</strong> short — and feed is 64% of the reason.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= THE CYCLE (scroll-scrubbed) ========================= -->
+<section id="cycle" class="section--flush">
+  <div class="cycle-track" data-cycle-track>
+    <div class="cycle-pin">
+      <div class="cycle-inner">
+
+        <div class="cycle-copy">
+          <p class="eyebrow">Forty-two days</p>
+          <h2 class="headline">Scroll it. Or throw it.</h2>
+          <p class="subhead">
+            One grow-out, start to finish. Every figure below is the planner's own
+            model of your flock — bird weight, survivors, feed drawn down, bags
+            opened — moving in step with the day.
+          </p>
+
+          <div class="phases" aria-hidden="true">
+            <span class="phase-chip" data-phase="Starter">Starter</span>
+            <span class="phase-chip" data-phase="Grower">Grower</span>
+            <span class="phase-chip" data-phase="Finisher">Finisher</span>
+          </div>
+
+          <div class="scrub">
+            <div class="scrub__rail" data-scrub-rail role="slider" tabindex="0"
+                 aria-label="Day of the grow-out cycle"
+                 aria-valuemin="0" aria-valuemax="42" aria-valuenow="0">
+              <div class="scrub__groove"><i class="scrub__fill" data-scrub-fill></i></div>
+              <div class="scrub__handle"><span class="scrub__knob" data-scrub-handle></span></div>
+            </div>
+            <div class="scrub__legend">
+              <span class="caption">Placement</span>
+              <span class="caption">Processing</span>
+            </div>
+          </div>
+
+          <div class="readout">
+            <div>
+              <div class="metric__k">Day</div>
+              <div class="metric__v tnum" data-out="day">0</div>
+            </div>
+            <div>
+              <div class="metric__k">Live weight</div>
+              <div class="metric__v tnum"><span data-out="weight">0.09</span><small> lb</small></div>
+            </div>
+            <div>
+              <div class="metric__k">Birds alive</div>
+              <div class="metric__v tnum" data-out="alive">1,500</div>
+            </div>
+            <div>
+              <div class="metric__k">Feed drawn</div>
+              <div class="metric__v tnum"><span data-out="feed">0</span><small> kg</small></div>
+            </div>
+          </div>
+
+          <p class="caption" style="margin-top:1rem">
+            <span data-out="bags">0</span> of 226 bags opened ·
+            <span data-out="phase">Starter</span> ration
+          </p>
+        </div>
+
+        <div class="bird-stage">
+          <svg class="bird-svg" viewBox="0 0 200 215" role="img"
+               aria-label="A chick grows into a finished broiler as the forty-two day cycle advances, ringed by a progress arc.">
+            <circle class="arc-track" cx="100" cy="112" r="88"/>
+            <circle class="arc-fill" data-arc cx="100" cy="112" r="88" transform="rotate(-90 100 112)"/>
+
+            <g data-bird-group>
+              <!-- Day-old chick -->
+              <g data-bird="chick">
+                <path class="bird-stroke" d="M90 165 L87 182 M105 165 L108 182"/>
+                <path class="bird-stroke" d="M81 182 h12 M102 182 h12"/>
+                <ellipse class="bird-shape" cx="96" cy="140" rx="31" ry="28"/>
+                <circle class="bird-shape" cx="119" cy="111" r="19"/>
+                <path class="bird-shape" d="M136 108 L152 114 L136 120 Z"/>
+                <circle class="bird-eye" cx="125" cy="106" r="2.9"/>
+              </g>
+
+              <!-- Finished broiler -->
+              <g data-bird="broiler" style="opacity:0">
+                <path class="bird-stroke" d="M88 168 L85 188 M110 168 L113 188"/>
+                <path class="bird-stroke" d="M78 188 h14 M106 188 h14"/>
+                <path class="bird-shape" d="M56 118 C40 104 34 88 40 78 C50 88 60 96 70 100 Z"/>
+                <ellipse class="bird-shape" cx="94" cy="136" rx="44" ry="35"/>
+                <circle class="bird-shape" cx="130" cy="96" r="18"/>
+                <path class="bird-shape" d="M120 78 c3-7 7-4 8 1 c3-6 8-3 7 3 c3-4 7 0 5 5 Z"/>
+                <path class="bird-shape" d="M147 94 L165 100 L147 107 Z"/>
+                <path class="bird-shape" d="M136 112 c5 0 8 4 6 8 c-3 4-9 2-9-3 Z"/>
+                <circle class="bird-eye" cx="137" cy="90" r="3.1"/>
+              </g>
+            </g>
+          </svg>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= CAPABILITIES ========================= -->
+<section class="section wrap" id="capabilities">
+  <div class="section-head" data-reveal>
+    <p class="eyebrow">Capabilities</p>
+    <h2 class="headline">Everything a cycle needs. Nothing it doesn't.</h2>
+    <p class="subhead">Each module maps to something you already record — just live, checked against breed standards, and joined to the money.</p>
+  </div>
+
+  <div class="grid grid--3">
+    <article class="card card--lift" data-reveal>
+      <svg class="card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11.5l2.5 2.5L20 5.5"/><path d="M20 12.5V19a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9.5"/></svg>
+      <h3 class="title">The daily check</h3>
+      <p>One screen, under a minute, on a phone in the house. Yesterday carries forward, so the bird count never drifts.</p>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Mortality and culls, with running birds alive</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>New bag opened — ties real use to the bag plan</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Water, litter, house temperature, health</li>
+      </ul>
+    </article>
+
+    <article class="card card--lift" data-reveal data-reveal-delay="80">
+      <svg class="card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16l-1.4 12.2A2 2 0 0 1 16.6 21H7.4a2 2 0 0 1-2-1.8L4 7Z"/><path d="M4 7V5.5a1.5 1.5 0 0 1 1.5-1.5h13A1.5 1.5 0 0 1 20 5.5V7"/><path d="M10 11.5v5M14 11.5v5"/></svg>
+      <h3 class="title">Feed and bags</h3>
+      <p>Starter, grower and finisher requirements from the weekly intake curve, resolved into whole 30&nbsp;kg bags and a buying schedule.</p>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>26 starter, 76 grower, 125 finisher</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Planned against actual, flagged the day they part</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Live conversion ratio against the breed objective</li>
+      </ul>
+    </article>
+
+    <article class="card card--lift" data-reveal data-reveal-delay="160">
+      <svg class="card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13h3.5l2.5 6 4-14 2.5 8H21"/></svg>
+      <h3 class="title">Growth and forecast</h3>
+      <p>Sample weights plot against the breed curve, then project finish weight, remaining feed spend and the date the flock hits target.</p>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Projected live weight and processing date</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Mortality trend against the 3–5% band</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>End-of-cycle margin at today's prices</li>
+      </ul>
+    </article>
+
+    <article class="card card--lift" data-reveal>
+      <svg class="card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7.2 8.7 5 8.7-5M12 22.1V12.2"/></svg>
+      <h3 class="title">Processing and yield</h3>
+      <p>Live weight through dressing, shrink and trim, split across whole birds and the seven-part mix, with lot records kept for traceability.</p>
+    </article>
+
+    <article class="card card--lift" data-reveal data-reveal-delay="80">
+      <svg class="card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21V9.5L12 3l9 6.5V21"/><path d="M9.5 21v-6.5h5V21"/></svg>
+      <h3 class="title">Assets and stock</h3>
+      <p>Houses, brooders, feeders, drinkers, the chiller and the truck — service dates, depreciation carried into cost per bird, feed and packaging on hand.</p>
+    </article>
+
+    <article class="card card--lift" data-reveal data-reveal-delay="160">
+      <span class="chip-soon">Next</span>
+      <svg class="card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>
+      <h3 class="title">Invoices and follow-up</h3>
+      <p>Turn a processing run into invoices, track what is paid, and let an assistant draft the chase on what isn't. Nothing leaves without your approval.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ========================= PARTS ========================= -->
+<section class="section wrap" id="parts">
+  <div class="section-head" data-reveal>
+    <p class="eyebrow">Yield</p>
+    <h2 class="headline">One bird. Eight ways to sell it.</h2>
+    <p class="subhead">
+      A 5.5&nbsp;lb bird dresses to 3.96, and 3.88 survives chilling. Forty per cent
+      go out whole; the rest are cut into seven lines that each carry their own
+      margin. Drag to move through them.
+    </p>
+  </div>
+
+  <div class="carousel" data-reveal>
+    <div class="carousel__viewport">
+      <div class="carousel__rail" data-carousel>
+        <article class="part">
+          <div class="part__name">Whole bird</div>
+          <div class="part__mix">570 birds · 2,212 lb</div>
+          <div class="part__meter"><i style="--w:1"></i></div>
+          <div class="part__rev tnum">$7,189</div>
+          <div class="part__sub">$3.25 / lb</div>
+        </article>
+        <article class="part">
+          <div class="part__name">Boneless breast</div>
+          <div class="part__mix">30% of cut-up · 966 lb</div>
+          <div class="part__meter"><i style="--w:.806"></i></div>
+          <div class="part__rev tnum">$5,793</div>
+          <div class="part__sub">$6.00 / lb · the line that pays</div>
+        </article>
+        <article class="part">
+          <div class="part__name">Leg quarters</div>
+          <div class="part__mix">28% of cut-up · 901 lb</div>
+          <div class="part__meter"><i style="--w:.282"></i></div>
+          <div class="part__rev tnum">$2,028</div>
+          <div class="part__sub">$2.25 / lb</div>
+        </article>
+        <article class="part">
+          <div class="part__name">Breast quarters</div>
+          <div class="part__mix">15% of cut-up · 483 lb</div>
+          <div class="part__meter"><i style="--w:.212"></i></div>
+          <div class="part__rev tnum">$1,521</div>
+          <div class="part__sub">$3.15 / lb</div>
+        </article>
+        <article class="part">
+          <div class="part__name">Wings</div>
+          <div class="part__mix">10% of cut-up · 322 lb</div>
+          <div class="part__meter"><i style="--w:.146"></i></div>
+          <div class="part__rev tnum">$1,046</div>
+          <div class="part__sub">$3.25 / lb</div>
+        </article>
+        <article class="part">
+          <div class="part__name">Giblets</div>
+          <div class="part__mix">6% of cut-up · 193 lb</div>
+          <div class="part__meter"><i style="--w:.048"></i></div>
+          <div class="part__rev tnum">$348</div>
+          <div class="part__sub">$1.80 / lb</div>
+        </article>
+        <article class="part">
+          <div class="part__name">Backs</div>
+          <div class="part__mix">8% of cut-up · 257 lb</div>
+          <div class="part__meter"><i style="--w:.043"></i></div>
+          <div class="part__rev tnum">$309</div>
+          <div class="part__sub">$1.20 / lb</div>
+        </article>
+        <article class="part">
+          <div class="part__name">Necks</div>
+          <div class="part__mix">3% of cut-up · 97 lb</div>
+          <div class="part__meter"><i style="--w:.015"></i></div>
+          <div class="part__rev tnum">$106</div>
+          <div class="part__sub">$1.10 / lb</div>
+        </article>
+      </div>
+    </div>
+
+    <div class="carousel__nav">
+      <button class="round-btn" type="button" data-carousel-prev data-press aria-label="Previous product lines">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
+      <button class="round-btn" type="button" data-carousel-next data-press aria-label="Next product lines">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= FIGURES ========================= -->
+<section class="section wrap" id="figures">
+  <div class="section-head" data-reveal>
+    <p class="eyebrow">The figures</p>
+    <h2 class="headline">What a pound has to sell for.</h2>
+    <p class="subhead">
+      Roost builds the same cost stack your planner does, then reduces it to a
+      single number — and says plainly when that number is out of reach.
+    </p>
+  </div>
+
+  <div class="ledger">
+    <div class="card" data-reveal>
+      <h3 class="title" style="margin-bottom:1.4rem">Where the money goes</h3>
+      <div class="bars">
+        <div>
+          <div class="bar__top"><span>Feed</span><span class="tnum">$12,526 · 64%</span></div>
+          <div class="bar__track"><div class="bar__fill" style="--w:.644"></div></div>
+        </div>
+        <div>
+          <div class="bar__top"><span>Day-old chicks</span><span class="tnum">$2,250 · 12%</span></div>
+          <div class="bar__track"><div class="bar__fill" style="--w:.116"></div></div>
+        </div>
+        <div>
+          <div class="bar__top"><span>Processing</span><span class="tnum">$1,781 · 9%</span></div>
+          <div class="bar__track"><div class="bar__fill" style="--w:.092"></div></div>
+        </div>
+        <div>
+          <div class="bar__top"><span>Packaging and cut-up labour</span><span class="tnum">$1,550 · 8%</span></div>
+          <div class="bar__track"><div class="bar__fill bar__fill--warn" style="--w:.080"></div></div>
+        </div>
+        <div>
+          <div class="bar__top"><span>Labour, utilities, litter, transport</span><span class="tnum">$1,344 · 7%</span></div>
+          <div class="bar__track"><div class="bar__fill bar__fill--warn" style="--w:.069"></div></div>
+        </div>
+      </div>
+      <p class="caption" style="margin-top:1.4rem">
+        Feed is nearly two thirds of the cycle. Every 0.1 off the conversion ratio is
+        worth about $660 here — more than litter, utilities, medication and overhead
+        together.
+      </p>
+    </div>
+
+    <div class="card" data-reveal data-reveal-delay="100">
+      <h3 class="title" style="margin-bottom:1rem">Breakeven</h3>
+      <div class="gauge">
+        <svg viewBox="0 0 260 155" role="img" aria-label="Gauge: the cycle sells at 3.32 dollars per pound against a breakeven of 3.52 dollars per pound.">
+          <path d="M35 120 A95 95 0 0 1 225 120" fill="none" stroke="var(--hairline)" stroke-width="10" stroke-linecap="round"/>
+          <!-- Fill terminates at the needle angle (-18deg = $3.32), so the arc and
+               the needle can never tell two different stories. -->
+          <path d="M35 120 A95 95 0 0 1 100.6 29.6" fill="none" stroke="var(--accent)" stroke-width="10" stroke-linecap="round"/>
+          <!-- breakeven marker at $3.52 -->
+          <g transform="rotate(27 130 120)">
+            <line x1="130" y1="30" x2="130" y2="47" stroke="var(--warn)" stroke-width="4" stroke-linecap="round"/>
+          </g>
+          <g class="gauge__needle" style="--angle:-18deg">
+            <line x1="130" y1="120" x2="130" y2="42" stroke="var(--ink)" stroke-width="3.5" stroke-linecap="round"/>
+          </g>
+          <circle cx="130" cy="120" r="7" fill="var(--ink)"/>
+          <text x="35" y="145" fill="var(--ink-3)" font-size="11" text-anchor="middle">$3.00</text>
+          <text x="225" y="145" fill="var(--ink-3)" font-size="11" text-anchor="middle">$3.80</text>
+        </svg>
+      </div>
+      <div class="metrics metrics--2" style="margin-top:1.25rem">
+        <div class="metric"><div class="metric__k">Selling at</div><div class="metric__v tnum">$3.32</div></div>
+        <div class="metric"><div class="metric__k">Breakeven</div><div class="metric__v tnum" style="color:var(--warn)">$3.52</div></div>
+      </div>
+      <p class="caption" style="margin-top:1rem">
+        Twenty cents a pound, about $1,110 on the cycle. Roost prices the three ways
+        out — conversion, mix, or the price list — before you commit to any of them.
+      </p>
+    </div>
+  </div>
+
+  <div class="figures" data-reveal>
+    <div><div class="metric__k">Revenue per bird</div><div class="metric__v tnum"><span data-count="12.87" data-decimals="2" data-prefix="$">$0</span></div></div>
+    <div><div class="metric__k">Cost per bird</div><div class="metric__v tnum"><span data-count="13.65" data-decimals="2" data-prefix="$">$0</span></div></div>
+    <div><div class="metric__k">Feed per bird</div><div class="metric__v tnum"><span data-count="4.74" data-decimals="2">0</span><small> kg</small></div></div>
+    <div><div class="metric__k">Saleable per bird</div><div class="metric__v tnum"><span data-count="3.88" data-decimals="2">0</span><small> lb</small></div></div>
+  </div>
+</section>
+
+<!-- ========================= BENCHMARKS ========================= -->
+<section class="section wrap">
+  <div class="section-head" data-reveal>
+    <p class="eyebrow">Benchmarks</p>
+    <h2 class="headline">Your numbers, held against the standard.</h2>
+    <p class="subhead">A value that looks ordinary alone gets flagged the moment it drifts from what the breed and the industry expect.</p>
+  </div>
+
+  <div class="grid grid--2">
+    <ul class="bench" data-reveal>
+      <li><b>Feed conversion</b><span>Modern broiler objectives sit near <code>1.55–1.65</code> at 42 days. This planner implies <code>1.90</code> — the largest single lever on the page.</span></li>
+      <li><b>Mortality</b><span>A healthy 42-day cycle generally runs <code>3–5%</code>. The plan assumes 5%; sustained days above trend raise a flag.</span></li>
+      <li><b>Seven-day weight</b><span>Chicks are widely expected near <code>4–4.5×</code> day-old weight by day 7 — the earliest honest signal of how the cycle ends.</span></li>
+      <li><b>Brooding temperature</b><span>Around <code>32–34 °C</code> at placement, stepping down some <code>2–3 °C</code> a week toward <code>21 °C</code>, read from the birds as much as the thermometer.</span></li>
+    </ul>
+    <ul class="bench" data-reveal data-reveal-delay="100">
+      <li><b>Water to feed</b><span>Typically <code>1.7–2.0 : 1</code> by weight. Drinking falls before birds go off feed.</span></li>
+      <li><b>Litter moisture</b><span>Held near <code>20–25%</code>. Damp litter is the standard precursor to footpad and hock lesions — which is why the daily check asks.</span></li>
+      <li><b>Dressing yield</b><span>Whole-bird yields commonly fall between <code>70–75%</code>. Your 72% sits mid-band.</span></li>
+      <li><b>Vaccination windows</b><span>Newcastle and IB near day 5–7, Gumboro near day 14 are common patterns. Roost holds the schedule and defers to your vet — as your workbook already notes.</span></li>
+    </ul>
+  </div>
+
+  <p class="caption" style="margin-top:1.5rem;max-width:52rem">
+    Reference ranges come from published breed performance objectives and standard
+    extension guidance. They are starting defaults — every figure is editable per
+    farm, and health decisions belong with your veterinarian.
+  </p>
+</section>
+
+<!-- ========================= ROADMAP ========================= -->
+<section class="section wrap" id="roadmap">
+  <div class="section-head" data-reveal>
+    <p class="eyebrow">Roadmap</p>
+    <h2 class="headline">Built in the order a farm needs it.</h2>
+  </div>
+
+  <div class="phases-grid">
+    <div class="phase-card phase-card--now" data-reveal>
+      <p class="eyebrow">Phase one · now</p>
+      <h3 class="title" style="margin-top:.4rem">Track the flock</h3>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Cycles, placements, the daily check</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Feed phases and the bag planner</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Vaccination and health schedule</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Processing runs, yields, cycle P&amp;L</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Asset register and maintenance</li>
+      </ul>
+    </div>
+
+    <div class="phase-card" data-reveal data-reveal-delay="90">
+      <p class="eyebrow" style="color:var(--ink-3)">Phase two · next</p>
+      <h3 class="title" style="margin-top:.4rem">Get paid</h3>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2" stroke-linecap="round"/></svg>Customers, price lists, orders</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2" stroke-linecap="round"/></svg>Invoices raised from a processing run</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2" stroke-linecap="round"/></svg>Payments, credit notes, ageing</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2" stroke-linecap="round"/></svg>Sales history by customer and part</li>
+      </ul>
+    </div>
+
+    <div class="phase-card" data-reveal data-reveal-delay="180">
+      <p class="eyebrow" style="color:var(--ink-3)">Phase three · later</p>
+      <h3 class="title" style="margin-top:.4rem">Follow up</h3>
+      <ul>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2" stroke-linecap="round"/></svg>Drafted reminders on overdue invoices</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2" stroke-linecap="round"/></svg>Tone and cadence set per customer</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2" stroke-linecap="round"/></svg>Nothing sends without your approval</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="var(--ink-3)" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2" stroke-linecap="round"/></svg>Demand forecasting from sales history</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ========================= FAQ ========================= -->
+<section class="section wrap">
+  <div class="section-head" data-reveal>
+    <p class="eyebrow">Questions</p>
+    <h2 class="headline">Straight answers.</h2>
+  </div>
+
+  <div class="faq" data-accordion data-reveal>
+    <details>
+      <summary>Do I have to give up my spreadsheet?</summary>
+      <div data-accordion-body><p>No. Roost imports the planner you already use — placements, mortality, intake curves, cost assumptions, sales mix, prices — and every one stays editable. Most farms run both for a cycle before trusting the app alone, and a full cycle exports back out whenever you want it.</p></div>
+    </details>
+    <details>
+      <summary>How much work is the daily check?</summary>
+      <div data-accordion-body><p>Eight fields, most a single tap. Bird counts carry forward on their own; the only things you type are mortality and, on weighing days, a handful of sample weights. It is built to be filled in standing in the house, one-handed.</p></div>
+    </details>
+    <details>
+      <summary>What exactly do the forecasts forecast?</summary>
+      <div data-accordion-body><p>Three things: live weight at your target age, feed still to buy, and end-of-cycle margin at today's prices. They draw on your own history once a cycle or two is on file, and on published breed curves before that. They are projections, not promises, and Roost shows the assumptions behind each one.</p></div>
+    </details>
+    <details>
+      <summary>Will the assistant email customers on its own?</summary>
+      <div data-accordion-body><p>Not unless you tell it to. It drafts a reminder in the tone you set and leaves it in a queue until you approve it. Review, edit, delete, or switch it off per customer. The database itself refuses to record a send without a recorded approval.</p></div>
+    </details>
+    <details>
+      <summary>Where does the data live?</summary>
+      <div data-accordion-body><p>In PostgreSQL, with the site served as a static build. Every table — cycles, daily checks, feed purchases, processing runs, assets, invoices — exports to CSV or a spreadsheet on demand. There is no lock-in.</p></div>
+    </details>
+  </div>
+</section>
+
+<!-- ========================= CLOSING ========================= -->
+<section class="section wrap closing" id="start">
+  <h2 class="headline" data-reveal>Know where the cycle stands<br>on day nineteen.</h2>
+  <p class="subhead" data-reveal data-reveal-delay="80">
+    Set up your first flock in about ten minutes. Bring the planner — Roost will
+    read it and tell you what it has been hiding.
+  </p>
+  <div class="hero__actions" data-reveal data-reveal-delay="140">
+    <a class="btn btn--primary" href="#start" data-press>Start your first cycle</a>
+    <a class="btn btn--quiet" href="#capabilities" data-press>
+      See what it tracks
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </a>
+  </div>
+</section>
+
+</main>
+
+<!-- ========================= FOOTER ========================= -->
+<footer class="footer">
+  <div class="wrap">
+    <div class="footer__grid">
+      <div>
+        <a class="brand" href="#top" style="margin-bottom:.7rem">
+          <svg class="brand__mark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <ellipse cx="10.5" cy="14.5" rx="6.5" ry="5.5"/><circle cx="15.5" cy="8.5" r="3.6"/><path d="M18.6 7.6 22.5 9l-3.9 1.4z"/>
+          </svg>
+          Roost
+        </a>
+        <p class="caption" style="max-width:26rem">Flock, feed and finance for small family-run poultry farms selling fresh chicken.</p>
+      </div>
+      <div>
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#cycle">The cycle</a></li>
+          <li><a href="#capabilities">Capabilities</a></li>
+          <li><a href="#parts">Yield</a></li>
+          <li><a href="#figures">Figures</a></li>
+          <li><a href="#roadmap">Roadmap</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Farm</h4>
+        <ul>
+          <li><a href="#start">Start a cycle</a></li>
+          <li><a href="#figures">Breakeven</a></li>
+          <li><a href="#roadmap">Invoicing</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <span class="caption">© <span id="year">2026</span> Roost. Figures shown model a 1,500-bird cycle.</span>
+      <span class="caption">Not veterinary advice — confirm health decisions with your vet.</span>
+    </div>
+  </div>
+</footer>
+
+<script src="assets/motion.js"></script>
+</body>
+</html>

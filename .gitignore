@@ -1,0 +1,16 @@
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+
+# Dependencies (none today, but harmless to guard against)
+node_modules/
+
+# Secrets — never commit these
+.env
+.env.*
+*.pem

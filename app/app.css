@@ -1,0 +1,161 @@
+/* =============================================================================
+   Roost app — built on the landing page's tokens so the product and the pitch
+   look like the same thing. Only what the app needs beyond styles.css lives here.
+   ========================================================================== */
+
+body { background: var(--page); }
+
+.app-shell { max-width: 640px; margin-inline: auto; padding: 0 var(--gutter) 5rem; }
+
+/* ---------- Top bar ---------- */
+.app-bar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: .75rem;
+  padding: .75rem var(--gutter);
+  background: var(--surface);
+  -webkit-backdrop-filter: var(--material-blur);
+  backdrop-filter: var(--material-blur);
+}
+.app-bar__title { font-weight: 600; letter-spacing: -.02em; }
+.app-bar__spacer { margin-left: auto; }
+
+/* ---------- Auth ---------- */
+.auth {
+  max-width: 380px; margin: clamp(3rem, 12vh, 7rem) auto;
+  padding-inline: var(--gutter); text-align: center;
+}
+.auth .headline { margin-bottom: .5rem; }
+
+.field { display: grid; gap: .4rem; margin-bottom: 1rem; text-align: left; }
+.field label { font-size: .8125rem; font-weight: 500; color: var(--ink-2); }
+.field input, .field select, .field textarea {
+  width: 100%; min-height: 46px;
+  padding: .6rem .85rem;
+  font: inherit; font-size: 1rem;
+  color: var(--ink);
+  background: var(--page-2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  transition: border-color .18s var(--ease-out), box-shadow .18s var(--ease-out);
+}
+.field textarea { min-height: 84px; resize: vertical; padding-top: .6rem; }
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.field__hint { font-size: .75rem; color: var(--ink-3); }
+
+/* ---------- Status banner ---------- */
+.banner {
+  display: flex; gap: .65rem; align-items: flex-start;
+  padding: .85rem 1rem; border-radius: var(--r-md);
+  font-size: .875rem; line-height: 1.5;
+  margin-bottom: 1.25rem;
+}
+.banner svg { width: 17px; height: 17px; flex: none; margin-top: .15rem; }
+.banner--error { background: color-mix(in srgb, #d70015 12%, transparent); color: #b3000f; }
+.banner--warn  { background: var(--warn-bg); color: var(--ink); }
+.banner--ok    { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+:root[data-theme="dark"] .banner--error { color: #ff8a8a; }
+
+/* ---------- Cycle header ---------- */
+.cycle-head { padding-block: 1.5rem 1.25rem; }
+.cycle-head__day {
+  font-size: clamp(2.5rem, 9vw, 3.25rem);
+  font-weight: 700; letter-spacing: -.035em; line-height: 1;
+}
+.cycle-head__of { font-size: 1rem; font-weight: 500; color: var(--ink-3); letter-spacing: -.01em; }
+
+.stat-row {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1px; background: var(--hairline-2);
+  border-radius: var(--r-md); overflow: hidden; margin-top: 1.25rem;
+}
+.stat-row > div { background: var(--page-2); padding: .8rem .75rem; }
+.stat-row .metric__v { font-size: 1.2rem; }
+
+/* ---------- The check form ---------- */
+.check-card {
+  background: var(--page-2);
+  border-radius: var(--r-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-1);
+  margin-top: 1.5rem;
+}
+.check-card h2 { font-size: 1.0625rem; font-weight: 600; letter-spacing: -.018em; margin-bottom: 1.25rem; }
+
+/* Segmented control — one tap, no dropdown */
+.segment { display: flex; gap: 4px; padding: 4px; background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: var(--r-sm); }
+.segment button {
+  flex: 1; min-height: 40px; padding: .45rem .3rem;
+  border-radius: 9px; cursor: pointer;
+  font-size: .875rem; font-weight: 500; color: var(--ink-2);
+  transition: background-color .18s var(--ease-out), color .18s var(--ease-out), transform .1s var(--ease-out);
+}
+.segment button[aria-pressed="true"] { background: var(--page-2); color: var(--ink); box-shadow: var(--shadow-1); font-weight: 600; }
+.segment button.is-pressed { transform: scale(.96); }
+
+/* Stepper for whole-number counts — faster than a keyboard on a phone */
+.stepper { display: flex; align-items: center; gap: .75rem; }
+.stepper__btn {
+  width: 48px; height: 48px; flex: none; border-radius: 50%; cursor: pointer;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  transition: background-color .18s var(--ease-out), transform .1s var(--ease-out);
+}
+.stepper__btn:hover { background: color-mix(in srgb, var(--ink) 14%, transparent); }
+.stepper__btn.is-pressed { transform: scale(.9); }
+.stepper__btn svg { width: 20px; height: 20px; }
+.stepper input {
+  flex: 1; text-align: center; font-size: 1.5rem; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.divider { height: 1px; background: var(--hairline-2); margin-block: 1.5rem; }
+
+.switch-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  min-height: 48px;
+}
+.switch-row__label { font-size: .9375rem; font-weight: 500; }
+.switch {
+  position: relative; width: 52px; height: 31px; flex: none;
+  border-radius: var(--r-pill); cursor: pointer;
+  background: color-mix(in srgb, var(--ink) 16%, transparent);
+  transition: background-color .25s var(--ease-out);
+}
+.switch[aria-checked="true"] { background: var(--accent); }
+.switch::after {
+  content: ''; position: absolute; top: 2px; left: 2px;
+  width: 27px; height: 27px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3);
+  transition: transform .25s var(--ease-soft);
+}
+.switch[aria-checked="true"]::after { transform: translateX(21px); }
+
+.save-bar {
+  position: sticky; bottom: 0;
+  padding: 1rem 0 1.25rem;
+  background: linear-gradient(to top, var(--page) 62%, transparent);
+}
+.save-bar .btn { width: 100%; min-height: 52px; font-size: 1.0625rem; font-weight: 600; }
+
+.btn[disabled] { opacity: .5; pointer-events: none; }
+
+.skeleton {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--ink) 7%, transparent) 25%,
+    color-mix(in srgb, var(--ink) 12%, transparent) 37%,
+    color-mix(in srgb, var(--ink) 7%, transparent) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: var(--r-sm);
+}
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
+[hidden] { display: none !important; }

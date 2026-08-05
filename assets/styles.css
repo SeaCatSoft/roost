@@ -284,6 +284,17 @@ button { font: inherit; color: inherit; background: none; border: 0; }
 
 .nav__cta { min-height: 32px; padding: .28rem .95rem; font-size: .8125rem; }
 
+/* Sign in sits quieter than the primary CTA: a returning user knows to look
+   for it, while a first-time visitor should land on "Start a cycle". */
+.nav__signin {
+  display: inline-flex; align-items: center;
+  min-height: 44px; padding-inline: .4rem;
+  font-size: .8125rem; color: var(--ink-2); white-space: nowrap;
+  transition: color .2s var(--ease-out), transform .1s var(--ease-out);
+}
+.nav__signin:hover { color: var(--ink); }
+.nav__signin.is-pressed { transform: scale(.94); }
+
 @media (min-width: 860px) { .nav__links { display: flex; } }
 
 /* =============================================================================

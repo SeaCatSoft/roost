@@ -11,7 +11,7 @@
    and a silent disagreement between the two would be worth knowing about.
    ========================================================================== */
 
-import { db, isConfigured, $, banner, loadOpenCycle } from './db.js';
+import { db, isConfigured, $, banner, loadOpenCycle, myRole, canEdit, lockForViewer } from './db.js';
 
 const screens = { setup: $('setupScreen'), auth: $('authScreen'), app: $('appScreen') };
 const show = (n) => Object.entries(screens).forEach(([k, el]) => { el.hidden = k !== n; });
@@ -120,6 +120,11 @@ async function boot() {
 
   renderForm();
   recalc();
+
+  if (!canEdit(await myRole())) {
+    lockForViewer(document.querySelector('.app-shell'),
+      'You have view-only access. These figures drive the model, but only an owner or member can change them.');
+  }
 }
 
 /* ---------- Form ---------------------------------------------------------- */

@@ -8,7 +8,8 @@
    ========================================================================== */
 
 import {
-  db, isConfigured, $, today, daysBetween, banner, loadOpenCycle
+  db, isConfigured, $, today, daysBetween, banner, loadOpenCycle,
+  myRole, canEdit, lockForViewer
 } from './db.js';
 
 const screens = { setup: $('setupScreen'), auth: $('authScreen'), app: $('appScreen') };
@@ -64,6 +65,11 @@ async function boot() {
   $('dayInput').max = state.cycle.target_sale_age;
 
   await loadSamples();
+
+  if (!canEdit(await myRole())) {
+    lockForViewer(document.querySelector('.panel:nth-of-type(2)'),
+      'You have view-only access. Weighings are shown, but cannot be recorded.');
+  }
 }
 
 async function loadSamples() {

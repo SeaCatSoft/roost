@@ -55,6 +55,44 @@ export function phaseForDay(dayNumber) {
   return dayNumber <= 14 ? 'Starter' : dayNumber <= 28 ? 'Grower' : 'Finisher';
 }
 
+/* ---------------------------------------------------------------------------
+   Roles. A viewer can read everything and change nothing — the database
+   enforces that, but a form that silently fails on save is a bad way to find
+   out, so screens ask first and present themselves read-only.
+   ------------------------------------------------------------------------ */
+let cachedRole;
+
+export async function myRole() {
+  if (cachedRole !== undefined) return cachedRole;
+  const { data, error } = await db.rpc('my_role');
+  // Older databases have no my_role yet; assume full access rather than
+  // locking someone out of a working app.
+  cachedRole = error ? 'member' : (data || 'member');
+  return cachedRole;
+}
+
+export const canEdit = (role) => role === 'owner' || role === 'member';
+
+/* Disable every control inside a container and explain why once. */
+export function lockForViewer(container, message) {
+  if (!container) return;
+
+  container.querySelectorAll('input, textarea, select, button').forEach((el) => {
+    el.disabled = true;
+  });
+
+  const note = document.createElement('div');
+  note.className = 'banner banner--warn viewer-note';
+  note.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/>' +
+    '<circle cx="12" cy="12" r="3"/></svg><div>' +
+    (message || 'You have view-only access, so nothing here can be changed.') +
+    '</div>';
+
+  container.prepend(note);
+}
+
 /* The open cycle: most recent placement not yet closed. */
 export async function loadOpenCycle() {
   const { data, error } = await db

@@ -579,4 +579,26 @@ body { background: var(--page); }
 .chip-btn:disabled { opacity: .4; cursor: default; }
 .chip-btn--danger:hover:not(:disabled) { background: color-mix(in srgb, #d70015 12%, transparent); color: #d70015; }
 
+/* Three roles need a picker, not a toggle */
+.role-picker {
+  display: inline-flex; gap: 2px; padding: 2px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  border-radius: var(--r-pill);
+}
+.role-picker__opt {
+  min-height: 30px; padding: .2rem .6rem;
+  border-radius: var(--r-pill); cursor: pointer;
+  font-size: .78rem; font-weight: 500; white-space: nowrap; color: var(--ink-3);
+  transition: background-color .18s var(--ease-out), color .18s var(--ease-out);
+}
+.role-picker__opt:hover:not(:disabled) { color: var(--ink); }
+/* The current role is the disabled one, so it reads as selected rather than dead */
+.role-picker__opt[aria-pressed="true"] {
+  background: var(--page-2); color: var(--ink);
+  font-weight: 600; box-shadow: var(--shadow-1); opacity: 1;
+}
+.role-picker__opt:disabled[aria-pressed="false"] { opacity: .35; cursor: default; }
+
+.viewer-note { margin-bottom: 1.25rem; }
+
 [hidden] { display: none !important; }

@@ -58,11 +58,12 @@
 
     <!-- What the roles mean -->
     <details class="rolebox">
-      <summary>What the two roles can do</summary>
+      <summary>What each role can do</summary>
       <div class="rolebox__body">
         <p><strong>Owner</strong> — everything a member can, plus inviting people, changing roles, and removing access.</p>
         <p><strong>Member</strong> — records checks and weighings, edits assumptions and prices, starts cycles, and <strong>can delete a batch permanently</strong>.</p>
-        <p class="caption">There is no view-only role. A member is full trust over the farm's records; the difference is only control over people.</p>
+        <p><strong>Viewer</strong> — sees everything, changes nothing. Useful for a vet, an accountant, or anyone who needs the figures without the ability to alter them.</p>
+        <p class="caption">Member is full trust over the farm's records. If someone only needs to look, give them viewer.</p>
       </div>
     </details>
 
@@ -91,6 +92,7 @@
       <div class="field">
         <label>Role</label>
         <div class="segment" data-segment="role">
+          <button type="button" data-value="viewer" aria-pressed="false" data-press>Viewer</button>
           <button type="button" data-value="member" aria-pressed="true" data-press>Member</button>
           <button type="button" data-value="owner" aria-pressed="false" data-press>Owner</button>
         </div>

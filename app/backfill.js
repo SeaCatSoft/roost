@@ -8,7 +8,7 @@
 
 import {
   db, isConfigured, $, today, daysBetween, dateForDay, formatShortDate,
-  banner, phaseForDay, loadOpenCycle
+  banner, phaseForDay, loadOpenCycle, myRole, canEdit, lockForViewer
 } from './db.js';
 
 const screens = { setup: $('setupScreen'), auth: $('authScreen'), app: $('appScreen') };
@@ -69,6 +69,11 @@ async function boot() {
   });
 
   render();
+
+  if (!canEdit(await myRole())) {
+    lockForViewer(document.querySelector('.app-shell'),
+      'You have view-only access. Past days are shown, but cannot be filled in.');
+  }
 }
 
 /* ---------- Render -------------------------------------------------------- */

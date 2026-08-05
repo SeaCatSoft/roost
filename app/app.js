@@ -5,7 +5,8 @@
    ========================================================================== */
 
 import {
-  db, isConfigured, $, today, daysBetween, banner, phaseForDay, loadOpenCycle
+  db, isConfigured, $, today, daysBetween, banner, phaseForDay, loadOpenCycle,
+  myRole, canEdit, lockForViewer
 } from './db.js';
 
 const screens = {
@@ -131,6 +132,10 @@ async function boot() {
   $('dayOf').textContent = `of ${state.cycle.target_sale_age}`;
 
   await Promise.all([loadProgress(), loadExistingCheck()]);
+
+  if (!canEdit(await myRole())) {
+    lockForViewer($('checkForm'), 'You have view-only access. Today\'s figures are shown, but cannot be changed.');
+  }
 }
 
 async function loadProgress() {

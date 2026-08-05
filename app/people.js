@@ -16,6 +16,8 @@ const showOk = (m) => banner($('appOk'), $('appOkText'), m);
 
 if (!isConfigured) { show('setup'); throw new Error('Supabase is not configured'); }
 
+const ROLE_LABEL = { owner: 'Owner', member: 'Member', viewer: 'Viewer' };
+
 const state = { farm: null, people: [], invites: [], isOwner: false, inviteRole: 'member', pending: null };
 
 const when = (iso) =>
@@ -53,7 +55,9 @@ async function boot() {
 
   $('roleNote').textContent = state.isOwner
     ? 'You are an owner, so you can invite people and change what they can do.'
-    : 'You are a member. Only an owner can change who has access.';
+    : me?.role === 'viewer'
+      ? 'You have view-only access. You can see who is here, but not change it.'
+      : 'You are a member. Only an owner can change who has access.';
 
   $('invitePanel').hidden = !state.isOwner;
 
@@ -90,23 +94,33 @@ function renderPeople() {
       `<div class="person__avatar" aria-hidden="true">${initial}</div>
        <div class="person__main">
          <div class="person__email">${p.email}${p.is_you ? ' <span class="person__you">you</span>' : ''}</div>
-         <div class="person__meta">${p.role === 'owner' ? 'Owner' : 'Member'} · joined ${when(p.joined_at)}</div>
+         <div class="person__meta">${ROLE_LABEL[p.role] || p.role} · joined ${when(p.joined_at)}</div>
        </div>`;
 
     if (state.isOwner) {
       const actions = document.createElement('div');
       actions.className = 'person__actions';
 
-      const toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'chip-btn';
-      toggle.setAttribute('data-press', '');
-      toggle.textContent = p.role === 'owner' ? 'Make member' : 'Make owner';
-      toggle.disabled = lastOwner;
-      if (lastOwner) toggle.title = 'The only owner cannot be demoted';
-      toggle.addEventListener('click', () =>
-        changeRole(p, p.role === 'owner' ? 'member' : 'owner'));
-      actions.appendChild(toggle);
+      // Three roles need a picker rather than a toggle. Each is one tap, and
+      // the current one is simply already selected.
+      const picker = document.createElement('div');
+      picker.className = 'role-picker';
+      picker.setAttribute('role', 'group');
+      picker.setAttribute('aria-label', `Role for ${p.email}`);
+
+      ['viewer', 'member', 'owner'].forEach((role) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'role-picker__opt';
+        b.setAttribute('aria-pressed', String(p.role === role));
+        b.textContent = ROLE_LABEL[role];
+        // Demoting the only owner is refused by the database, so it is not offered.
+        b.disabled = p.role === role || (lastOwner && role !== 'owner');
+        if (lastOwner && role !== 'owner') b.title = 'The only owner cannot be demoted';
+        b.addEventListener('click', () => changeRole(p, role));
+        picker.appendChild(b);
+      });
+      actions.appendChild(picker);
 
       const remove = document.createElement('button');
       remove.type = 'button';
@@ -135,7 +149,7 @@ async function changeRole(person, role) {
   });
 
   if (error) { showError(error.message); return; }
-  showOk(`${person.email} is now ${role === 'owner' ? 'an owner' : 'a member'}.`);
+  showOk(`${person.email} is now ${role === 'owner' ? 'an owner' : role === 'viewer' ? 'view-only' : 'a member'}.`);
   await boot();
 }
 
@@ -253,7 +267,7 @@ $('inviteBtn').addEventListener('click', async () => {
 
   $('inviteEmail').value = '';
   showOk(
-    `${email} is invited as ${state.inviteRole === 'owner' ? 'an owner' : 'a member'}. ` +
+    `${email} is invited as ${state.inviteRole === 'owner' ? 'an owner' : state.inviteRole === 'viewer' ? 'view-only' : 'a member'}. ` +
     `They get access the moment they sign up with that address.`
   );
   await loadInvites();

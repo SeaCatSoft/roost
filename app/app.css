@@ -236,4 +236,66 @@ body { background: var(--page); }
 .bag-toggle:disabled { cursor: default; opacity: .95; }
 .bag-toggle svg { width: 18px; height: 18px; }
 
+/* ---------- Feed dashboard ---------- */
+.panel {
+  background: var(--page-2);
+  border-radius: var(--r-lg);
+  padding: 1.4rem;
+  box-shadow: var(--shadow-1);
+  margin-top: 1.25rem;
+}
+.panel__head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;
+}
+.panel__title { font-size: 1.0625rem; font-weight: 600; letter-spacing: -.018em; }
+
+.legend { display: flex; gap: .9rem; }
+.legend__item { display: inline-flex; align-items: center; gap: .35rem; font-size: .75rem; color: var(--ink-3); }
+.legend__swatch { width: 14px; height: 3px; border-radius: 2px; flex: none; }
+.legend__swatch--plan { background: repeating-linear-gradient(90deg, var(--ink-3) 0 4px, transparent 4px 7px); }
+.legend__swatch--actual { background: var(--accent); }
+
+.phase-row + .phase-row { margin-top: 1rem; }
+.phase-row__top { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.phase-row__name { font-size: .9375rem; font-weight: 500; }
+.phase-row__nums { font-size: .8125rem; color: var(--ink-3); }
+.phase-row__track {
+  height: 8px; margin-top: .4rem; border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+  overflow: hidden;
+}
+.phase-row__fill {
+  height: 100%; border-radius: var(--r-pill); background: var(--accent);
+  transition: width .9s var(--ease-soft);
+}
+.phase-row__fill--over { background: var(--warn); }
+
+/* Conversion ratio scale */
+.fcr__value {
+  font-size: clamp(2.5rem, 10vw, 3.25rem);
+  font-weight: 700; letter-spacing: -.035em; line-height: 1;
+  margin-bottom: 1rem;
+}
+.fcr__scale {
+  position: relative; height: 10px; border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--ink) 9%, transparent);
+}
+/* The breed-objective band, 1.55–1.65 on a 1.4–2.2 scale */
+.fcr__band {
+  position: absolute; top: 0; bottom: 0;
+  left: 18.75%; width: 12.5%;
+  background: var(--accent); opacity: .35;
+}
+.fcr__marker {
+  position: absolute; top: 50%; width: 4px; height: 22px;
+  margin: -11px 0 0 -2px; border-radius: 2px;
+  background: var(--ink);
+  transition: left .9s var(--ease-soft);
+}
+.fcr__scale-labels {
+  display: flex; justify-content: space-between;
+  margin-top: .45rem; font-size: .7rem; color: var(--ink-3);
+}
+
 [hidden] { display: none !important; }

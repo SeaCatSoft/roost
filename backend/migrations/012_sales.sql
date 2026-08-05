@@ -12,8 +12,21 @@
 -- =============================================================================
 
 
+-- ---------- Dependencies ------------------------------------------------------
+-- This migration builds on the viewer role from 009. Without is_farm_editor the
+-- policy block below fails with a confusing "function does not exist", so the
+-- problem is named here instead.
+do $$
+begin
+  if to_regprocedure('public.is_farm_editor(bigint)') is null then
+    raise exception
+      'Migration 009 has not been applied. Run 008_viewer_role.sql (on its own), then 009_viewer_policies.sql, then this file.';
+  end if;
+end $$;
+
+
 -- ---------- Customers ---------------------------------------------------------
-create table customers (
+create table if not exists customers (
   id                 bigint generated always as identity primary key,
   farm_id            bigint not null references farms(id) on delete cascade,
   name               text not null,
@@ -27,16 +40,21 @@ create table customers (
   unique (farm_id, name)
 );
 
-create index on customers (farm_id) where active;
+create index if not exists customers_farm_active_idx on customers (farm_id) where active;
 
 
 -- ---------- Invoices ----------------------------------------------------------
 -- status covers only what cannot be derived. Whether it is paid comes from the
 -- payments table; this records intent — is it still a draft, has it gone out,
 -- has it been cancelled.
-create type invoice_status as enum ('draft', 'sent', 'void');
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'invoice_status') then
+    create type invoice_status as enum ('draft', 'sent', 'void');
+  end if;
+end $$;
 
-create table invoices (
+create table if not exists invoices (
   id          bigint generated always as identity primary key,
   farm_id     bigint not null references farms(id) on delete cascade,
   customer_id bigint not null references customers(id) on delete restrict,
@@ -51,10 +69,10 @@ create table invoices (
   unique (farm_id, number)
 );
 
-create index on invoices (farm_id, issued_on desc);
-create index on invoices (customer_id);
+create index if not exists invoices_farm_issued_idx on invoices (farm_id, issued_on desc);
+create index if not exists invoices_customer_idx on invoices (customer_id);
 
-create table invoice_lines (
+create table if not exists invoice_lines (
   id              bigint generated always as identity primary key,
   invoice_id      bigint not null references invoices(id) on delete cascade,
   product_line_id bigint references product_lines(id) on delete set null,
@@ -65,9 +83,9 @@ create table invoice_lines (
   sort_order      smallint not null default 0
 );
 
-create index on invoice_lines (invoice_id);
+create index if not exists invoice_lines_invoice_idx on invoice_lines (invoice_id);
 
-create table payments (
+create table if not exists payments (
   id         bigint generated always as identity primary key,
   invoice_id bigint not null references invoices(id) on delete cascade,
   paid_on    date not null default current_date,
@@ -77,7 +95,7 @@ create table payments (
   created_at timestamptz not null default now()
 );
 
-create index on payments (invoice_id);
+create index if not exists payments_invoice_idx on payments (invoice_id);
 
 
 -- ---------- Access helpers ----------------------------------------------------
@@ -109,6 +127,10 @@ do $$
 declare t text;
 begin
   foreach t in array array['customers', 'invoices'] loop
+    execute format('drop policy if exists %I on %I', t||'_read', t);
+    execute format('drop policy if exists %I on %I', t||'_insert', t);
+    execute format('drop policy if exists %I on %I', t||'_update', t);
+    execute format('drop policy if exists %I on %I', t||'_delete', t);
     execute format('create policy %I on %I for select using (is_farm_member(farm_id))', t||'_read', t);
     execute format('create policy %I on %I for insert with check (is_farm_editor(farm_id))', t||'_insert', t);
     execute format('create policy %I on %I for update using (is_farm_editor(farm_id)) with check (is_farm_editor(farm_id))', t||'_update', t);
@@ -116,6 +138,10 @@ begin
   end loop;
 
   foreach t in array array['invoice_lines', 'payments'] loop
+    execute format('drop policy if exists %I on %I', t||'_read', t);
+    execute format('drop policy if exists %I on %I', t||'_insert', t);
+    execute format('drop policy if exists %I on %I', t||'_update', t);
+    execute format('drop policy if exists %I on %I', t||'_delete', t);
     execute format('create policy %I on %I for select using (can_access_invoice(invoice_id))', t||'_read', t);
     execute format('create policy %I on %I for insert with check (can_edit_invoice(invoice_id))', t||'_insert', t);
     execute format('create policy %I on %I for update using (can_edit_invoice(invoice_id)) with check (can_edit_invoice(invoice_id))', t||'_update', t);
@@ -308,6 +334,7 @@ begin
   return new;
 end $$;
 
+drop trigger if exists trg_payment_within_total on payments;
 create trigger trg_payment_within_total
   before insert or update on payments
   for each row execute function assert_payment_within_total();

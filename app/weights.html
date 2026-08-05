@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Weights · Roost</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%231a7f37'/%3E%3Cellipse cx='46' cy='60' rx='26' ry='22' fill='%23fff'/%3E%3Ccircle cx='66' cy='38' r='14' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../assets/styles.css">
+<link rel="stylesheet" href="app.css">
+<script src="../assets/theme-init.js"></script>
+</head>
+<body>
+
+<section id="setupScreen" class="auth" hidden>
+  <h1 class="headline">Almost there</h1>
+  <p class="subhead" style="margin-inline:auto">The app needs your Supabase project details before it can connect.</p>
+</section>
+
+<section id="authScreen" class="auth" hidden>
+  <h1 class="headline">Roost</h1>
+  <p class="subhead" style="margin-inline:auto;margin-bottom:2rem">Sign in to continue.</p>
+  <p><a class="btn btn--primary" href="./" style="width:100%;min-height:50px">Go to sign in</a></p>
+</section>
+
+<div id="appScreen" hidden>
+  <header class="app-bar">
+    <a class="app-bar__back" href="./" aria-label="Back to daily check">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+    </a>
+    <span class="app-bar__title">Weights</span>
+    <span class="app-bar__spacer"></span>
+    <button class="icon-btn" id="themeToggle" type="button" data-press aria-label="Switch appearance" aria-pressed="false">
+      <svg class="sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg>
+      <svg class="moon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+    </button>
+  </header>
+
+  <main class="app-shell">
+
+    <div id="appError" class="banner banner--error" hidden style="margin-top:1.25rem">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 8.5v5M12 17h.01"/><circle cx="12" cy="12" r="9.5"/></svg>
+      <div id="appErrorText"></div>
+    </div>
+
+    <section class="cycle-head">
+      <p class="caption" id="cycleLabel">Loading…</p>
+      <h1 class="title" style="margin-block:.35rem .75rem">Sample weights</h1>
+
+      <div class="stat-row">
+        <div>
+          <div class="metric__k">Latest</div>
+          <div class="metric__v tnum" id="latestWeight">—</div>
+        </div>
+        <div>
+          <div class="metric__k">Vs standard</div>
+          <div class="metric__v tnum" id="vsStandard">—</div>
+        </div>
+        <div>
+          <div class="metric__k">Uniformity</div>
+          <div class="metric__v tnum" id="uniformity">—</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Growth curve -->
+    <section class="panel">
+      <div class="panel__head">
+        <h2 class="panel__title">Growth</h2>
+        <div class="legend">
+          <span class="legend__item"><i class="legend__swatch legend__swatch--plan"></i>Breed standard</span>
+          <span class="legend__item"><i class="legend__swatch legend__swatch--actual"></i>Your flock</span>
+        </div>
+      </div>
+      <svg id="growthChart" viewBox="0 0 340 190" role="img" aria-labelledby="growthDesc" style="width:100%;height:auto">
+        <desc id="growthDesc">Average bird weight by day, your samples against the breed standard.</desc>
+        <g id="gGrid"></g>
+        <path id="stdLine" fill="none" stroke="var(--ink-3)" stroke-width="2" stroke-dasharray="4 4" stroke-linejoin="round"/>
+        <path id="actLine" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+        <g id="actDots"></g>
+        <g id="gLabels"></g>
+      </svg>
+      <p class="caption" id="growthNote" style="margin-top:.75rem"></p>
+    </section>
+
+    <!-- New weighing -->
+    <section class="panel">
+      <h2 class="panel__title" style="margin-bottom:1rem">Record a weighing</h2>
+
+      <div class="field">
+        <label for="dayInput">Day of cycle</label>
+        <input id="dayInput" type="number" inputmode="numeric" min="1" step="1">
+      </div>
+
+      <div class="field">
+        <label>Scale units</label>
+        <div class="segment" data-segment="unit">
+          <button type="button" data-value="g" aria-pressed="true" data-press>Grams</button>
+          <button type="button" data-value="kg" aria-pressed="false" data-press>Kilos</button>
+          <button type="button" data-value="lb" aria-pressed="false" data-press>Pounds</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="weightsInput">Each bird's weight</label>
+        <textarea id="weightsInput" inputmode="decimal"
+          placeholder="Type each weight, separated by a space."></textarea>
+        <span class="field__hint">
+          Weigh ten or more birds from different parts of the house — a sample from one
+          corner tells you about that corner, not the flock.
+        </span>
+      </div>
+
+      <div id="tally" class="tally" hidden>
+        <div>
+          <div class="metric__k">Birds</div>
+          <div class="metric__v tnum" id="tallyCount">0</div>
+        </div>
+        <div>
+          <div class="metric__k">Average</div>
+          <div class="metric__v tnum" id="tallyAvg">—</div>
+        </div>
+        <div>
+          <div class="metric__k">Spread</div>
+          <div class="metric__v tnum" id="tallyCv">—</div>
+        </div>
+      </div>
+
+      <div id="tallyWarn" class="banner banner--warn" hidden style="margin-top:1rem"></div>
+
+      <div class="save-bar" style="position:static;padding-bottom:0">
+        <button class="btn btn--primary" type="button" id="saveBtn" data-press disabled>
+          Save weighing
+        </button>
+      </div>
+    </section>
+
+    <!-- History -->
+    <section class="panel">
+      <h2 class="panel__title" style="margin-bottom:1rem">Previous weighings</h2>
+      <div id="history"><p class="caption">Loading…</p></div>
+    </section>
+
+    <p class="caption" style="text-align:center;margin-top:1.5rem">
+      <a href="./" style="text-decoration:underline;text-underline-offset:3px">Daily check</a>
+      &nbsp;·&nbsp;
+      <a href="feed.html" style="text-decoration:underline;text-underline-offset:3px">Feed</a>
+      &nbsp;·&nbsp;
+      <a href="backfill.html" style="text-decoration:underline;text-underline-offset:3px">Backfill</a>
+    </p>
+  </main>
+</div>
+
+<script type="module" src="weights.js"></script>
+<script src="../assets/motion.js"></script>
+</body>
+</html>

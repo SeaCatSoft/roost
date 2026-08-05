@@ -298,4 +298,25 @@ body { background: var(--page); }
   margin-top: .45rem; font-size: .7rem; color: var(--ink-3);
 }
 
+/* ---------- Sample weights ---------- */
+.tally {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1px; background: var(--hairline-2);
+  border-radius: var(--r-md); overflow: hidden; margin-top: 1rem;
+}
+.tally > div { background: var(--page); padding: .8rem .75rem; }
+.tally .metric__v { font-size: 1.2rem; }
+
+.weigh-row {
+  display: grid; grid-template-columns: 1fr auto 68px;
+  gap: .75rem; align-items: center;
+  padding: .8rem 0;
+}
+.weigh-row + .weigh-row { border-top: 1px solid var(--hairline-2); }
+.weigh-row__day { font-size: .9375rem; font-weight: 500; }
+.weigh-row__meta { font-size: .75rem; color: var(--ink-3); }
+.weigh-row__val { font-size: 1rem; font-weight: 600; }
+.weigh-row__delta { font-size: .875rem; color: var(--ink-3); text-align: right; }
+.weigh-row__delta.is-behind { color: var(--warn); font-weight: 600; }
+
 [hidden] { display: none !important; }

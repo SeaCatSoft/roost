@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Processing · Roost</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%231a7f37'/%3E%3Cellipse cx='46' cy='60' rx='26' ry='22' fill='%23fff'/%3E%3Ccircle cx='66' cy='38' r='14' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../assets/styles.css">
+<link rel="stylesheet" href="app.css">
+<script src="../assets/theme-init.js"></script>
+</head>
+<body>
+
+<section id="setupScreen" class="auth" hidden>
+  <h1 class="headline">Almost there</h1>
+  <p class="subhead" style="margin-inline:auto">The app needs your Supabase project details before it can connect.</p>
+</section>
+
+<section id="authScreen" class="auth" hidden>
+  <h1 class="headline">Roost</h1>
+  <p class="subhead" style="margin-inline:auto;margin-bottom:2rem">Sign in to continue.</p>
+  <p><a class="btn btn--primary" href="./" style="width:100%;min-height:50px">Go to sign in</a></p>
+</section>
+
+<div id="appScreen" hidden>
+  <header class="app-bar">
+    <a class="app-bar__back" href="./" aria-label="Back to dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+    </a>
+    <span class="app-bar__title">Processing</span>
+    <span class="app-bar__spacer"></span>
+    <button class="icon-btn" id="themeToggle" type="button" data-press aria-label="Switch appearance" aria-pressed="false">
+      <svg class="sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg>
+      <svg class="moon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+    </button>
+  </header>
+
+  <main class="app-shell">
+
+    <div id="appError" class="banner banner--error" hidden style="margin-top:1.25rem">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 8.5v5M12 17h.01"/><circle cx="12" cy="12" r="9.5"/></svg>
+      <div id="appErrorText"></div>
+    </div>
+
+    <section class="cycle-head">
+      <p class="caption" id="cycleLabel">Loading…</p>
+      <h1 class="title" style="margin-block:.35rem .5rem">What actually came out</h1>
+      <p class="caption">
+        Every money figure so far has been modelled from your assumptions. From
+        here it is what happened.
+      </p>
+    </section>
+
+    <!-- ===== Actual against plan ===== -->
+    <section class="panel" id="actualPanel" hidden>
+      <h2 class="panel__title" style="margin-bottom:1rem">Against the plan</h2>
+      <div id="compareRows"></div>
+      <p class="caption" id="actualNote" style="margin-top:1rem"></p>
+    </section>
+
+    <!-- ===== Runs recorded ===== -->
+    <section style="margin-top:1.5rem">
+      <div class="panel__head" style="margin-bottom:.75rem">
+        <h2 class="panel__title">Runs</h2>
+        <button class="btn btn--glass" type="button" id="addRunBtn" data-press
+                style="min-height:36px;padding:.3rem 1rem;font-size:.8125rem">Record a run</button>
+      </div>
+      <div id="runList"><p class="caption">Loading…</p></div>
+    </section>
+
+    <!-- ===== The form ===== -->
+    <section class="panel" id="formPanel" hidden style="margin-top:1.5rem">
+      <h2 class="panel__title" id="formTitle">Record a run</h2>
+
+      <div class="setting-grid" style="margin-top:1rem">
+        <label class="setting">
+          <span class="setting__label">Date processed</span>
+          <span class="setting__input"><input id="fDate" type="date"></span>
+        </label>
+        <label class="setting">
+          <span class="setting__label">Birds processed</span>
+          <span class="setting__input"><input id="fBirds" type="number" inputmode="numeric" min="1" step="1"></span>
+        </label>
+        <label class="setting">
+          <span class="setting__label">Condemned</span>
+          <span class="setting__input"><input id="fCondemned" type="number" inputmode="numeric" min="0" step="1" value="0"></span>
+        </label>
+        <label class="setting">
+          <span class="setting__label">Total live weight</span>
+          <span class="setting__input"><input id="fLive" type="number" inputmode="decimal" min="0" step="1"><span class="setting__unit">lb</span></span>
+        </label>
+        <label class="setting">
+          <span class="setting__label">Total dressed weight</span>
+          <span class="setting__input"><input id="fDressed" type="number" inputmode="decimal" min="0" step="1"><span class="setting__unit">lb</span></span>
+        </label>
+        <label class="setting">
+          <span class="setting__label">Processor</span>
+          <span class="setting__input"><input id="fProcessor" type="text"></span>
+        </label>
+        <label class="setting">
+          <span class="setting__label">Lot code</span>
+          <span class="setting__input"><input id="fLot" type="text"></span>
+        </label>
+      </div>
+
+      <h3 class="panel__title" style="font-size:.95rem;margin-top:1.75rem">Weight out, by line</h3>
+      <p class="caption" style="margin-top:.25rem;margin-bottom:.75rem">
+        Leave a line blank if you did not cut it. Whole birds take a count as well.
+      </p>
+      <div id="outputRows"></div>
+
+      <div class="live-tally" id="liveTally"></div>
+
+      <div class="sheet__actions" style="margin-top:1.25rem">
+        <button class="btn btn--glass" type="button" id="cancelBtn" data-press>Cancel</button>
+        <button class="btn btn--primary" type="button" id="saveRunBtn" data-press>Save run</button>
+      </div>
+    </section>
+
+    <p class="caption" style="text-align:center;margin-top:1.75rem">
+      <a href="./" style="text-decoration:underline;text-underline-offset:3px">Dashboard</a>
+      &nbsp;·&nbsp;
+      <a href="assumptions.html" style="text-decoration:underline;text-underline-offset:3px">Assumptions</a>
+    </p>
+  </main>
+</div>
+
+<!-- Delete confirmation -->
+<div class="sheet" id="delSheet" hidden>
+  <div class="sheet__scrim" data-close-sheet></div>
+  <div class="sheet__panel" role="dialog" aria-modal="true" aria-labelledby="delTitle">
+    <h2 class="title" id="delTitle">Delete this run?</h2>
+    <p class="caption" style="margin-block:.5rem 1.25rem" id="delWhat"></p>
+    <div class="sheet__actions">
+      <button class="btn btn--glass" type="button" data-close-sheet data-press>Keep it</button>
+      <button class="btn btn--danger" type="button" id="delConfirm" data-press>Delete</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="processing.js"></script>
+<script src="../assets/motion.js"></script>
+</body>
+</html>

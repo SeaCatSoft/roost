@@ -158,4 +158,82 @@ body { background: var(--page); }
   .skeleton { animation: none; }
 }
 
+/* ---------- Backfill ---------- */
+.app-bar__back {
+  width: 40px; height: 40px; margin-left: -.5rem;
+  display: grid; place-items: center; border-radius: 50%;
+  color: var(--ink-2);
+  transition: background-color .18s var(--ease-out), color .18s var(--ease-out);
+}
+.app-bar__back:hover { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
+.app-bar__back svg { width: 20px; height: 20px; }
+
+.bulk-bar { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1.25rem; }
+.bulk-bar .btn { min-height: 40px; padding: .4rem 1rem; font-size: .875rem; }
+
+.day-list {
+  margin-top: 1rem;
+  background: var(--page-2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+
+/* Four columns, shared by the header and every row so they stay aligned. */
+.day-list__head, .day-row {
+  display: grid;
+  grid-template-columns: 1fr 68px 68px 48px;
+  gap: .5rem;
+  align-items: center;
+  padding: .5rem .9rem;
+}
+.day-list__head {
+  font-size: .7rem; font-weight: 600; letter-spacing: .02em;
+  color: var(--ink-3); text-transform: uppercase;
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+.day-list__head span:not(:first-child) { text-align: center; }
+
+.day-row {
+  border-top: 1px solid var(--hairline-2);
+  transition: background-color .2s var(--ease-out);
+}
+.day-row.is-saved { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.day-row.is-dirty { background: var(--warn-bg); }
+
+.day-row__day { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.day-row__n { font-size: .9375rem; font-weight: 500; }
+.day-row__date { font-size: .75rem; color: var(--ink-3); }
+
+.day-row__num {
+  width: 100%; min-height: 40px; padding: .3rem .4rem;
+  text-align: center; font: inherit; font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--page);
+  border: 1px solid var(--hairline);
+  border-radius: 9px;
+  transition: border-color .18s var(--ease-out), box-shadow .18s var(--ease-out);
+}
+.day-row__num:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+/* Spinners steal width at this size and are useless on a phone. */
+.day-row__num::-webkit-outer-spin-button,
+.day-row__num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.day-row__num { -moz-appearance: textfield; appearance: textfield; }
+
+.bag-toggle {
+  width: 40px; height: 40px; border-radius: 11px; cursor: pointer;
+  display: grid; place-items: center;
+  color: var(--ink-3);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  transition: background-color .18s var(--ease-out), color .18s var(--ease-out);
+}
+.bag-toggle:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 13%, transparent); }
+.bag-toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.bag-toggle:disabled { cursor: default; opacity: .95; }
+.bag-toggle svg { width: 18px; height: 18px; }
+
 [hidden] { display: none !important; }

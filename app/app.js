@@ -4,10 +4,9 @@
    there is no server in between and nothing here to trust.
    ========================================================================== */
 
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
-
-const $ = (id) => document.getElementById(id);
+import {
+  db, isConfigured, $, today, daysBetween, banner, phaseForDay, loadOpenCycle
+} from './db.js';
 
 const screens = {
   setup: $('setupScreen'),
@@ -20,38 +19,13 @@ function show(name) {
 }
 
 /* ---------- Guard against an unconfigured deploy ------------------------- */
-if (!SUPABASE_URL || SUPABASE_URL.startsWith('PASTE_') ||
-    !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.startsWith('PASTE_')) {
+if (!isConfigured) {
   show('setup');
   throw new Error('Supabase is not configured — see app/config.js');
 }
 
-const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-/* ---------- Small helpers ------------------------------------------------ */
-function banner(el, textEl, message) {
-  if (!message) { el.hidden = true; return; }
-  textEl.textContent = message;
-  el.hidden = false;
-}
-
 const showAuthError = (m) => banner($('authError'), $('authErrorText'), m);
 const showAppError  = (m) => banner($('appError'),  $('appErrorText'),  m);
-
-// Local calendar date, not UTC. `toISOString` would roll the date over for
-// anyone west of Greenwich during the evening — and the evening is exactly
-// when this gets filled in.
-function today() {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-
-function daysBetween(fromISO, toISO) {
-  const a = new Date(fromISO + 'T00:00:00');
-  const b = new Date(toISO + 'T00:00:00');
-  return Math.round((b - a) / 86400000);
-}
 
 /* ---------- Form state --------------------------------------------------- */
 const state = {
@@ -143,24 +117,13 @@ async function boot() {
   show('app');
   showAppError(null);
 
-  // The open cycle: most recent placement that has not been closed.
-  const { data: cycles, error: cycleErr } = await db
-    .from('cycles')
-    .select('id, label, placed_on, birds_placed, target_sale_age, closed_at')
-    .is('closed_at', null)
-    .order('placed_on', { ascending: false })
-    .limit(1);
-
-  if (cycleErr) {
-    showAppError(`Could not load the cycle: ${cycleErr.message}`);
-    return;
-  }
-  if (!cycles || !cycles.length) {
-    showAppError('No open cycle found. Start one before recording checks.');
+  try {
+    state.cycle = await loadOpenCycle();
+  } catch (e) {
+    showAppError(e.message);
     return;
   }
 
-  state.cycle = cycles[0];
   state.dayNumber = Math.max(1, daysBetween(state.cycle.placed_on, today()) + 1);
 
   $('cycleLabel').textContent = state.cycle.label;
@@ -254,13 +217,10 @@ $('checkForm').addEventListener('submit', async (e) => {
   }
 
   if (state.bagOpened) {
-    const phase =
-      state.dayNumber <= 14 ? 'Starter' : state.dayNumber <= 28 ? 'Grower' : 'Finisher';
-
     const { error: bagErr } = await db.from('feed_bag_openings').insert({
       cycle_id: state.cycle.id,
       opened_on: today(),
-      phase
+      phase: phaseForDay(state.dayNumber)
     });
 
     if (bagErr) showAppError(`Check saved, but the bag was not recorded: ${bagErr.message}`);

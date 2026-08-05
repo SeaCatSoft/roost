@@ -438,4 +438,72 @@ body { background: var(--page); }
 .btn--danger:hover { background: #b3000f; }
 :root[data-theme="dark"] .btn--danger { background: #ff453a; color: #2b0000; }
 
+/* ---------- Assumptions ---------- */
+.outcome {
+  position: sticky; top: 52px; z-index: 30;
+  margin-top: .5rem; padding: .9rem 1rem;
+  background: var(--surface);
+  -webkit-backdrop-filter: var(--material-blur);
+  backdrop-filter: var(--material-blur);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+}
+.outcome__row { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
+.outcome__row > div { display: grid; gap: .1rem; }
+.outcome__v { font-size: 1.3rem; font-weight: 600; letter-spacing: -.02em; }
+.outcome__note { margin-top: .55rem; }
+
+.setting-grid { display: grid; gap: .5rem; margin-top: 1rem; }
+.setting {
+  display: grid; grid-template-columns: 1fr 150px;
+  gap: .75rem; align-items: center;
+}
+.setting__label { font-size: .9375rem; }
+.setting__sub { font-style: normal; font-size: .75rem; color: var(--ink-3); }
+
+.setting__input {
+  display: flex; align-items: center; gap: .35rem;
+  padding: .3rem .6rem;
+  background: var(--page);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  transition: border-color .18s var(--ease-out), box-shadow .18s var(--ease-out);
+}
+.setting__input:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.setting__input input {
+  width: 100%; min-height: 38px; border: 0; background: none; padding: 0;
+  font: inherit; font-size: 1rem; color: var(--ink);
+  font-variant-numeric: tabular-nums; text-align: right;
+}
+.setting__input input:focus { outline: none; }
+.setting__input input::-webkit-outer-spin-button,
+.setting__input input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.setting__input input { -moz-appearance: textfield; appearance: textfield; }
+.setting__unit { font-size: .8125rem; color: var(--ink-3); white-space: nowrap; }
+
+.price-list { margin-top: 1rem; display: grid; gap: .5rem; }
+.price-row {
+  display: grid; grid-template-columns: 1fr 96px 132px;
+  gap: .5rem; align-items: center;
+}
+.price-row__name { font-size: .9375rem; }
+.price-row__na { font-size: .8125rem; color: var(--ink-3); margin-inline: auto; }
+.price-row__mix, .price-row__price { padding-inline: .5rem; }
+
+@media (max-width: 460px) {
+  .setting { grid-template-columns: 1fr 128px; }
+  .price-row { grid-template-columns: 1fr 84px 120px; gap: .35rem; }
+  .price-row__name { font-size: .875rem; }
+}
+
+.mixtotal {
+  margin-top: .9rem; padding: .5rem .75rem; border-radius: 9px;
+  font-size: .8125rem;
+  background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent);
+}
+.mixtotal--off { background: var(--warn-bg); color: var(--warn); font-weight: 500; }
+
 [hidden] { display: none !important; }

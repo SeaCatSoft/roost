@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Daily check · Roost</title>
+<title>Roost</title>
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
@@ -14,7 +14,6 @@
 </head>
 <body>
 
-<!-- ===================== SETUP NOT DONE ===================== -->
 <section id="setupScreen" class="auth" hidden>
   <h1 class="headline">Almost there</h1>
   <p class="subhead" style="margin-inline:auto">
@@ -22,17 +21,13 @@
   </p>
   <div class="banner banner--warn" style="text-align:left;margin-top:1.5rem">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 8.5v5M12 17h.01"/><circle cx="12" cy="12" r="9.5"/></svg>
-    <div>
-      Open <code>app/config.js</code> and paste in your <strong>Project URL</strong> and
-      <strong>anon public</strong> key from Supabase → Settings → API.
-    </div>
+    <div>Open <code>app/config.js</code> and paste in your Project URL and anon public key.</div>
   </div>
 </section>
 
-<!-- ===================== SIGN IN ===================== -->
 <section id="authScreen" class="auth" hidden>
   <h1 class="headline">Roost</h1>
-  <p class="subhead" style="margin-inline:auto;margin-bottom:2rem">Sign in to today's check.</p>
+  <p class="subhead" style="margin-inline:auto;margin-bottom:2rem">Sign in to your farm.</p>
 
   <div id="authError" class="banner banner--error" hidden style="text-align:left">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 8.5v5M12 17h.01"/><circle cx="12" cy="12" r="9.5"/></svg>
@@ -42,30 +37,25 @@
   <form id="authForm">
     <div class="field">
       <label for="email">Email</label>
-      <input id="email" name="email" type="email" autocomplete="username" required>
+      <input id="email" type="email" autocomplete="username" required>
     </div>
     <div class="field">
       <label for="password">Password</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <input id="password" type="password" autocomplete="current-password" required>
     </div>
-    <button class="btn btn--primary" type="submit" id="signInBtn" data-press style="width:100%;min-height:50px">
-      Sign in
-    </button>
+    <button class="btn btn--primary" type="submit" id="signInBtn" data-press style="width:100%;min-height:50px">Sign in</button>
   </form>
 </section>
 
-<!-- ===================== APP ===================== -->
 <div id="appScreen" hidden>
   <header class="app-bar">
-    <span class="app-bar__title">Daily check</span>
+    <span class="app-bar__title" id="barTitle">Roost</span>
     <span class="app-bar__spacer"></span>
     <button class="icon-btn" id="themeToggle" type="button" data-press aria-label="Switch appearance" aria-pressed="false">
       <svg class="sun" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg>
       <svg class="moon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
     </button>
-    <button class="btn btn--glass" id="signOutBtn" type="button" data-press style="min-height:36px;padding:.3rem 1rem;font-size:.8125rem">
-      Sign out
-    </button>
+    <button class="btn btn--glass" id="signOutBtn" type="button" data-press style="min-height:36px;padding:.3rem 1rem;font-size:.8125rem">Sign out</button>
   </header>
 
   <main class="app-shell">
@@ -75,137 +65,158 @@
       <div id="appErrorText"></div>
     </div>
 
-    <!-- Cycle summary -->
-    <section class="cycle-head">
-      <p class="caption" id="cycleLabel">Loading…</p>
-      <p>
-        <span class="cycle-head__day tnum" id="dayNumber">—</span>
-        <span class="cycle-head__of" id="dayOf"></span>
-      </p>
+    <!-- ===== Today's checks, first because it is the thing to act on ===== -->
+    <a class="today" id="todayCard" href="check.html">
+      <div class="today__main">
+        <div class="today__label" id="todayLabel">Today's check</div>
+        <div class="today__state" id="todayState">—</div>
+      </div>
+      <div class="today__sessions" id="todaySessions"></div>
+      <svg class="today__chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+    </a>
 
-      <div class="stat-row">
+    <!-- ===== Where in the life cycle ===== -->
+    <section class="panel">
+      <div class="panel__head">
+        <h2 class="panel__title" id="cycleTitle">Cycle</h2>
+        <span class="phase-pill" id="phasePill">—</span>
+      </div>
+
+      <div class="dayline">
+        <div class="dayline__big tnum" id="dayBig">—</div>
+        <div class="dayline__of" id="dayOf"></div>
+      </div>
+
+      <!-- The grow-out as a bar: brooding, grower, finisher, and where you are -->
+      <svg id="lifeBar" viewBox="0 0 340 58" role="img" aria-labelledby="lifeDesc" style="width:100%;height:auto;margin-top:.5rem">
+        <desc id="lifeDesc">Position through the grow-out, showing the starter, grower and finisher phases.</desc>
+        <g id="lifeSegs"></g>
+        <g id="lifeLabels"></g>
+        <g id="lifeMarker"></g>
+      </svg>
+
+      <div class="stat-row" style="margin-top:1rem">
         <div>
           <div class="metric__k">Birds alive</div>
           <div class="metric__v tnum" id="birdsAlive">—</div>
         </div>
         <div>
           <div class="metric__k">Mortality</div>
-          <div class="metric__v tnum" id="mortalityPct">—</div>
+          <div class="metric__v tnum" id="mortality">—</div>
         </div>
         <div>
-          <div class="metric__k">Bags opened</div>
-          <div class="metric__v tnum" id="bagsOpened">—</div>
+          <div class="metric__k">Days left</div>
+          <div class="metric__v tnum" id="daysLeft">—</div>
         </div>
       </div>
     </section>
 
-    <!-- Today's check -->
-    <form class="check-card" id="checkForm">
-      <h2 id="checkHeading">Today</h2>
-
-      <div id="alreadySaved" class="banner banner--ok" hidden>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-        <div>Already recorded today. Changing anything below updates it.</div>
+    <!-- ===== Feed conversion ===== -->
+    <section class="panel">
+      <div class="panel__head">
+        <h2 class="panel__title">Feed conversion</h2>
+        <a class="panel__link" href="feed.html">Feed</a>
       </div>
 
-      <div class="field">
-        <label for="mortality">Deaths today</label>
-        <div class="stepper">
-          <button class="stepper__btn" type="button" data-step="mortality" data-delta="-1" data-press aria-label="One fewer death">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
-          </button>
-          <input id="mortality" name="mortality" type="number" inputmode="numeric" min="0" step="1" value="0">
-          <button class="stepper__btn" type="button" data-step="mortality" data-delta="1" data-press aria-label="One more death">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-          </button>
+      <div class="fcr-head">
+        <div class="fcr-head__v tnum" id="fcrNow">—</div>
+        <div class="fcr-head__t caption" id="fcrBasis"></div>
+      </div>
+
+      <!-- Bars at each weighing, against the breed objective band -->
+      <svg id="fcrChart" viewBox="0 0 340 150" role="img" aria-labelledby="fcrDesc" style="width:100%;height:auto">
+        <desc id="fcrDesc">Feed conversion ratio at each weighing, against the 1.55 to 1.65 breed objective.</desc>
+        <g id="fcrBand"></g>
+        <g id="fcrBars"></g>
+        <g id="fcrLabels"></g>
+      </svg>
+      <p class="caption" id="fcrNote" style="margin-top:.6rem"></p>
+    </section>
+
+    <!-- ===== Feed drawn vs planned ===== -->
+    <section class="panel">
+      <div class="panel__head">
+        <h2 class="panel__title">Feed against plan</h2>
+        <span class="caption" id="feedVariance"></span>
+      </div>
+      <div class="bars">
+        <div>
+          <div class="bar__top"><span>Opened</span><span class="tnum" id="bagsActual">—</span></div>
+          <div class="bar__track"><div class="bar__fill" id="bagsActualBar" style="width:0"></div></div>
+        </div>
+        <div>
+          <div class="bar__top"><span>Planned by now</span><span class="tnum" id="bagsPlanned">—</span></div>
+          <div class="bar__track"><div class="bar__fill bar__fill--muted" id="bagsPlannedBar" style="width:0"></div></div>
         </div>
       </div>
+    </section>
 
-      <div class="field">
-        <label for="culls">Culls today</label>
-        <div class="stepper">
-          <button class="stepper__btn" type="button" data-step="culls" data-delta="-1" data-press aria-label="One fewer cull">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
-          </button>
-          <input id="culls" name="culls" type="number" inputmode="numeric" min="0" step="1" value="0">
-          <button class="stepper__btn" type="button" data-step="culls" data-delta="1" data-press aria-label="One more cull">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-          </button>
+    <!-- ===== Money ===== -->
+    <section class="panel">
+      <div class="panel__head">
+        <h2 class="panel__title">Where the cycle lands</h2>
+        <a class="panel__link" href="assumptions.html">Assumptions</a>
+      </div>
+      <div class="stat-row">
+        <div>
+          <div class="metric__k">Breakeven</div>
+          <div class="metric__v tnum" id="mBreakeven">—</div>
+        </div>
+        <div>
+          <div class="metric__k">Selling at</div>
+          <div class="metric__v tnum" id="mBlended">—</div>
+        </div>
+        <div>
+          <div class="metric__k">Result</div>
+          <div class="metric__v tnum" id="mProfit">—</div>
         </div>
       </div>
+      <p class="caption" id="moneyNote" style="margin-top:.9rem"></p>
+    </section>
 
-      <div class="divider"></div>
-
-      <div class="switch-row">
-        <span class="switch-row__label" id="bagLabel">New feed bag opened</span>
-        <button type="button" class="switch" id="bagSwitch" role="switch" aria-checked="false" aria-labelledby="bagLabel"></button>
-      </div>
-      <p class="field__hint" id="bagHint" style="margin-top:.35rem">Ties real use to the bag plan.</p>
-
-      <div class="divider"></div>
-
-      <div class="field">
-        <label>Water</label>
-        <div class="segment" data-segment="water">
-          <button type="button" data-value="OK" aria-pressed="true" data-press>OK</button>
-          <button type="button" data-value="Low" aria-pressed="false" data-press>Low</button>
-          <button type="button" data-value="Empty" aria-pressed="false" data-press>Empty</button>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>Litter</label>
-        <div class="segment" data-segment="litter">
-          <button type="button" data-value="Dry" aria-pressed="true" data-press>Dry</button>
-          <button type="button" data-value="Damp" aria-pressed="false" data-press>Damp</button>
-          <button type="button" data-value="Wet" aria-pressed="false" data-press>Wet</button>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>Health</label>
-        <div class="segment" data-segment="health">
-          <button type="button" data-value="Normal" aria-pressed="true" data-press>Normal</button>
-          <button type="button" data-value="Off-feed" aria-pressed="false" data-press>Off-feed</button>
-          <button type="button" data-value="Coughing" aria-pressed="false" data-press>Coughing</button>
-          <button type="button" data-value="Lame" aria-pressed="false" data-press>Lame</button>
-        </div>
-      </div>
-
-      <div class="field">
-        <label for="temp">House temperature (°C)</label>
-        <input id="temp" name="temp" type="number" inputmode="decimal" step="0.1" placeholder="—">
-      </div>
-
-      <div class="field">
-        <label for="notes">Notes</label>
-        <textarea id="notes" name="notes" placeholder="Anything worth remembering."></textarea>
-      </div>
-
-      <div class="save-bar">
-        <button class="btn btn--primary" type="submit" id="saveBtn" data-press>Save today's check</button>
-      </div>
-    </form>
+    <!-- ===== Everything else ===== -->
+    <nav class="tiles">
+      <a class="tile" href="check.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11.5l2.5 2.5L20 5.5"/><path d="M20 12.5V19a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9.5"/></svg>
+        <span>Daily check</span>
+      </a>
+      <a class="tile" href="weights.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v16M4 8h16"/><path d="M7 8l-3 7h6zM17 8l-3 7h6z"/></svg>
+        <span>Weights</span>
+      </a>
+      <a class="tile" href="feed.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16l-1.4 12.2A2 2 0 0 1 16.6 21H7.4a2 2 0 0 1-2-1.8L4 7Z"/><path d="M4 7V5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5V7"/></svg>
+        <span>Feed</span>
+      </a>
+      <a class="tile" href="backfill.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+        <span>Backfill</span>
+      </a>
+      <a class="tile" href="history.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 4-6"/></svg>
+        <span>Batches</span>
+      </a>
+      <a class="tile" href="people.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 5.2a3.5 3.5 0 0 1 0 5.6M18 20a6.4 6.4 0 0 0-1.6-4.2"/></svg>
+        <span>People</span>
+      </a>
+      <a class="tile" href="assumptions.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1 2 2 0 1 1-4 0 1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3 15a2 2 0 1 1 0-4 1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 9.6 4.4a2 2 0 1 1 4 0 1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7 2 2 0 1 1 0 4Z"/></svg>
+        <span>Assumptions</span>
+      </a>
+      <a class="tile" href="start.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+        <span>New cycle</span>
+      </a>
+    </nav>
 
     <p class="caption" style="text-align:center;margin-top:1.5rem">
-      <a href="feed.html" style="text-decoration:underline;text-underline-offset:3px">Feed</a>
-      &nbsp;·&nbsp;
-      <a href="weights.html" style="text-decoration:underline;text-underline-offset:3px">Weights</a>
-      &nbsp;·&nbsp;
-      <a href="history.html" style="text-decoration:underline;text-underline-offset:3px">Batches</a>
-      &nbsp;·&nbsp;
-      <a href="assumptions.html" style="text-decoration:underline;text-underline-offset:3px">Assumptions</a>
-      &nbsp;·&nbsp;
-      <a href="people.html" style="text-decoration:underline;text-underline-offset:3px">People</a>
-      &nbsp;·&nbsp;
-      <a href="backfill.html" style="text-decoration:underline;text-underline-offset:3px">Backfill earlier days</a>
-      &nbsp;·&nbsp;
       <a href="../" style="text-decoration:underline;text-underline-offset:3px">Back to the site</a>
     </p>
   </main>
 </div>
 
-<script type="module" src="app.js"></script>
+<script type="module" src="dashboard.js"></script>
 <script src="../assets/motion.js"></script>
 </body>
 </html>

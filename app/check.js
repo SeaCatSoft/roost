@@ -32,6 +32,7 @@ const showAppError  = (m) => banner($('appError'),  $('appErrorText'),  m);
 const state = {
   cycle: null,
   dayNumber: null,
+  session: 'DAY',
   existing: null,
   water: 'OK',
   litter: 'Dry',
@@ -85,6 +86,31 @@ document.querySelectorAll('[data-segment]').forEach((seg) => {
   });
 });
 
+/* Days 1-14 are checked twice. Choosing a session reloads whatever was already
+   recorded for it, so switching between morning and afternoon shows each one's
+   own figures rather than carrying the other's across. */
+document.querySelectorAll('[data-segment="session"] button').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    document.querySelectorAll('[data-segment="session"] button').forEach((b) =>
+      b.setAttribute('aria-pressed', String(b === btn)));
+    state.session = btn.getAttribute('data-value');
+    resetForm();
+    await loadExistingCheck();
+  });
+});
+
+function resetForm() {
+  $('mortality').value = 0;
+  $('culls').value = 0;
+  $('temp').value = '';
+  $('notes').value = '';
+  setSegment('water', 'OK');
+  setSegment('litter', 'Dry');
+  setSegment('health', 'Normal');
+  $('alreadySaved').hidden = true;
+  $('saveBtn').textContent = "Save today's check";
+}
+
 function setSegment(key, value) {
   if (!value) return;
   state[key] = value;
@@ -131,6 +157,22 @@ async function boot() {
   $('dayNumber').textContent = `Day ${state.dayNumber}`;
   $('dayOf').textContent = `of ${state.cycle.target_sale_age}`;
 
+  // Brooding gets two checks a day; grow-out gets one.
+  const twice = state.dayNumber <= 14;
+  $('sessionField').hidden = !twice;
+
+  if (twice) {
+    // Default to whichever half of the day it is, rather than making someone
+    // choose the obvious thing every time.
+    state.session = new Date().getHours() < 12 ? 'AM' : 'PM';
+    document.querySelectorAll('[data-segment="session"] button').forEach((b) =>
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-value') === state.session)));
+    $('sessionHint').textContent =
+      'The first fortnight is checked twice a day. Both are recorded separately.';
+  } else {
+    state.session = 'DAY';
+  }
+
   await Promise.all([loadProgress(), loadExistingCheck()]);
 
   if (!canEdit(await myRole())) {
@@ -161,6 +203,7 @@ async function loadExistingCheck() {
     .select('*')
     .eq('cycle_id', state.cycle.id)
     .eq('day_number', state.dayNumber)
+    .eq('session', state.session)
     .maybeSingle();
 
   if (error) return;
@@ -196,6 +239,7 @@ $('checkForm').addEventListener('submit', async (e) => {
   const row = {
     cycle_id: state.cycle.id,
     day_number: state.dayNumber,
+    session: state.session,
     checked_on: today(),
     mortality: parseInt($('mortality').value, 10) || 0,
     culls: parseInt($('culls').value, 10) || 0,
@@ -211,7 +255,7 @@ $('checkForm').addEventListener('submit', async (e) => {
   // duplicating, which is what the unique constraint expects.
   const { error } = await db
     .from('daily_checks')
-    .upsert(row, { onConflict: 'cycle_id,day_number' });
+    .upsert(row, { onConflict: 'cycle_id,day_number,session' });
 
   if (error) {
     btn.disabled = false;

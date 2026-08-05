@@ -90,7 +90,7 @@ async function boot() {
 }
 
 /* ---------- Choices ------------------------------------------------------- */
-$('continueBtn').addEventListener('click', () => { window.location.href = './'; });
+$('continueBtn').addEventListener('click', () => { window.location.href = 'check.html'; });
 
 $('startOverBtn').addEventListener('click', async () => {
   await prepareForm();

@@ -7,18 +7,41 @@
 --
 -- Every check now carries a session. Days 1–14 expect AM and PM; from day 15
 -- a single 'DAY' check. Existing rows become 'DAY', which is what they were.
+--
+-- SAFE TO RE-RUN. Every step checks its own state first, so if an earlier
+-- attempt stopped partway through, running the whole file again is fine.
 -- =============================================================================
 
-create type check_session as enum ('AM', 'PM', 'DAY');
+
+-- ---------- The session type --------------------------------------------------
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'check_session') then
+    create type check_session as enum ('AM', 'PM', 'DAY');
+  end if;
+end $$;
+
+
+-- ---------- The column and its constraint -------------------------------------
+alter table daily_checks
+  add column if not exists session check_session not null default 'DAY';
 
 alter table daily_checks
-  add column session check_session not null default 'DAY';
+  drop constraint if exists daily_checks_cycle_id_day_number_key;
 
--- One row per cycle, day and session — rather than per cycle and day.
-alter table daily_checks drop constraint daily_checks_cycle_id_day_number_key;
-alter table daily_checks add constraint daily_checks_cycle_day_session_key
-  unique (cycle_id, day_number, session);
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'daily_checks_cycle_day_session_key'
+  ) then
+    alter table daily_checks
+      add constraint daily_checks_cycle_day_session_key
+      unique (cycle_id, day_number, session);
+  end if;
+end $$;
 
+
+-- ---------- Helpers -----------------------------------------------------------
 -- Sort order for a session within its day, so running totals accumulate in the
 -- order the checks actually happened.
 create or replace function public.session_rank(s check_session)
@@ -26,18 +49,27 @@ returns smallint language sql immutable as $$
   select case s when 'AM' then 1 when 'PM' then 2 else 1 end::smallint;
 $$;
 
-
--- ---------- How many checks a given day expects -------------------------------
--- Two for the first fortnight, one after. Kept as a function so the rule lives
--- in one place rather than being re-derived in every screen.
+-- How many checks a day expects: two for the first fortnight, one after. Kept
+-- as a function so the rule lives in one place.
 create or replace function public.checks_expected(p_day integer)
 returns smallint language sql immutable as $$
   select case when p_day <= 14 then 2 else 1 end::smallint;
 $$;
 
 
--- ---------- Running flock count, across sessions ------------------------------
-create or replace view v_daily_flock with (security_invoker = true) as
+-- ---------- Rebuild the dependent views ---------------------------------------
+-- v_daily_flock selects daily_checks.*, so adding a column changes the order of
+-- its output columns. CREATE OR REPLACE VIEW can only append columns, never
+-- reorder them, so these have to be dropped and rebuilt rather than replaced.
+-- Dropped newest-dependent first; CASCADE catches anything else hanging off them.
+drop view if exists v_cycle_summary  cascade;
+drop view if exists v_cycle_progress cascade;
+drop view if exists v_daily_totals   cascade;
+drop view if exists v_daily_flock    cascade;
+
+
+-- Running flock count, across sessions.
+create view v_daily_flock with (security_invoker = true) as
 select
   d.*,
   c.farm_id,
@@ -54,9 +86,8 @@ from daily_checks d
 join cycles c on c.id = d.cycle_id;
 
 
--- ---------- One row per day, sessions folded together -------------------------
--- What most screens actually want: the day as a whole.
-create or replace view v_daily_totals with (security_invoker = true) as
+-- One row per day, sessions folded together — what most screens actually want.
+create view v_daily_totals with (security_invoker = true) as
 select
   d.cycle_id,
   c.farm_id,
@@ -79,34 +110,8 @@ join cycles c on c.id = d.cycle_id
 group by d.cycle_id, c.farm_id, d.day_number;
 
 
--- ---------- The mortality guard, session-aware --------------------------------
-create or replace function assert_mortality_plausible() returns trigger
-language plpgsql as $$
-declare
-  placed  integer;
-  already integer;
-begin
-  select birds_placed into placed from cycles where id = new.cycle_id;
-
-  -- Every other check on the cycle: other days, and the other session of
-  -- this day. Comparing on day alone would ignore the morning's losses when
-  -- the afternoon check is saved.
-  select coalesce(sum(mortality + culls), 0) into already
-  from daily_checks
-  where cycle_id = new.cycle_id
-    and not (day_number = new.day_number and session = new.session);
-
-  if already + new.mortality + new.culls > placed then
-    raise exception 'day % (%) records % losses but only % birds remain of % placed',
-      new.day_number, new.session, new.mortality + new.culls, placed - already, placed;
-  end if;
-
-  return new;
-end $$;
-
-
--- ---------- Progress, counting part-finished days -----------------------------
-create or replace view v_cycle_progress with (security_invoker = true) as
+-- Progress, counting part-finished days.
+create view v_cycle_progress with (security_invoker = true) as
 select
   c.id                as cycle_id,
   c.farm_id,
@@ -143,8 +148,8 @@ left join lateral (
 ) t on true;
 
 
--- ---------- Batch summary, updated for sessions -------------------------------
-create or replace view v_cycle_summary with (security_invoker = true) as
+-- Batch summary. Days are counted distinctly: two sessions on day 3 are one day.
+create view v_cycle_summary with (security_invoker = true) as
 select
   c.id                as cycle_id,
   c.farm_id,
@@ -188,7 +193,6 @@ select
 from cycles c
 left join cycle_assumptions a on a.cycle_id = c.id
 left join lateral (
-  -- Distinct days, not distinct checks: two sessions on day 3 are still one day.
   select count(*) as days_recorded, coalesce(sum(losses), 0) as losses
   from v_daily_totals dt where dt.cycle_id = c.id
 ) ck on true
@@ -201,3 +205,68 @@ left join lateral (
   order by day_number desc limit 1
 ) sw on true
 left join v_cycle_pnl p on p.cycle_id = c.id;
+
+
+-- Farm-level totals. This sits on v_cycle_summary, so the CASCADE above took it
+-- with them — it has to be rebuilt here or the Batches screen loses its totals.
+create or replace view v_farm_totals with (security_invoker = true) as
+select
+  farm_id,
+  count(*)                            as cycles,
+  count(*) filter (where not is_open) as cycles_closed,
+  sum(birds_placed)                   as birds_placed,
+  sum(losses_actual)                  as losses,
+  case when sum(birds_placed) > 0
+       then sum(losses_actual)::numeric / sum(birds_placed)
+  end                                 as mortality,
+  sum(bags_opened)                    as bags_opened,
+  sum(feed_kg_actual)                 as feed_kg,
+  sum(modelled_revenue)               as revenue,
+  sum(modelled_cost)                  as cost,
+  sum(modelled_profit)                as profit,
+  case when sum(modelled_revenue) > 0
+       then sum(modelled_profit) / sum(modelled_revenue)
+  end                                 as margin
+from v_cycle_summary
+group by farm_id;
+
+
+-- ---------- The mortality guard, session-aware --------------------------------
+create or replace function assert_mortality_plausible() returns trigger
+language plpgsql as $$
+declare
+  placed  integer;
+  already integer;
+begin
+  select birds_placed into placed from cycles where id = new.cycle_id;
+
+  -- Every other check on the cycle: other days, and the other session of this
+  -- day. Comparing on day alone would ignore the morning's losses when the
+  -- afternoon check is saved.
+  select coalesce(sum(mortality + culls), 0) into already
+  from daily_checks
+  where cycle_id = new.cycle_id
+    and not (day_number = new.day_number and session = new.session);
+
+  if already + new.mortality + new.culls > placed then
+    raise exception 'day % (%) records % losses but only % birds remain of % placed',
+      new.day_number, new.session, new.mortality + new.culls, placed - already, placed;
+  end if;
+
+  return new;
+end $$;
+
+
+-- =============================================================================
+-- CHECK IT WORKED
+--
+--   select column_name from information_schema.columns
+--   where table_name = 'daily_checks' and column_name = 'session';   -- 1 row
+--
+--   select table_name from information_schema.views
+--   where table_schema = 'public'
+--     and table_name in ('v_daily_flock','v_daily_totals',
+--                        'v_cycle_progress','v_cycle_summary');      -- 4 rows
+--
+--   select * from v_cycle_pnl;   -- still -1110.49, unchanged by any of this
+-- =============================================================================

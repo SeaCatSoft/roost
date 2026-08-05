@@ -41,7 +41,7 @@ Every figure on the page is computed from `broiler_whole_and_parts_planner.xlsx`
 |---|---|
 | Birds sold | 1,425 |
 | Net saleable weight | 3.88 lb/bird · 5,530 lb total |
-| Total feed | 6,752 kg · 226 bags (26 starter / 76 grower / 125 finisher) |
+| Total feed | 6,752 kg · 227 bags (26 starter / 76 grower / 125 finisher) |
 | Revenue | $18,340 |
 | Total cost | $19,450 (feed is 64%) |
 | Operating result | **−$1,110 · −6.1% margin** |

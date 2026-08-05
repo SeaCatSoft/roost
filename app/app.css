@@ -319,4 +319,45 @@ body { background: var(--page); }
 .weigh-row__delta { font-size: .875rem; color: var(--ink-3); text-align: right; }
 .weigh-row__delta.is-behind { color: var(--warn); font-weight: 600; }
 
+/* ---------- Choice cards ---------- */
+.choice { display: grid; gap: .75rem; margin-top: 1.25rem; }
+.choice--tight { gap: .5rem; margin-top: 0; }
+
+.choice__card {
+  display: flex; align-items: flex-start; gap: .9rem;
+  width: 100%; text-align: left; cursor: pointer;
+  padding: 1.2rem 1.25rem;
+  background: var(--page-2);
+  border: 1.5px solid var(--hairline);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  transition: border-color .2s var(--ease-out), background-color .2s var(--ease-out),
+              transform .1s var(--ease-out);
+}
+.choice__card:hover { border-color: var(--ink-3); }
+.choice__card.is-pressed { transform: scale(.985); }
+.choice__card svg { width: 22px; height: 22px; flex: none; margin-top: .1rem; color: var(--ink-3); }
+.choice__card span { display: grid; gap: .15rem; }
+.choice__card strong { font-size: 1rem; font-weight: 600; letter-spacing: -.015em; }
+.choice__card em { font-style: normal; font-size: .8125rem; color: var(--ink-3); }
+
+.choice__card--primary { border-color: var(--accent); }
+.choice__card--primary svg { color: var(--accent); }
+
+.choice__card--selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--page-2));
+}
+.choice__card--selected svg { color: var(--accent); }
+
+/* Destructive option looks destructive only once chosen — red by default would
+   read as an error rather than a choice. */
+.choice__card--danger.choice__card--selected {
+  border-color: #d70015;
+  background: color-mix(in srgb, #d70015 8%, var(--page-2));
+}
+.choice__card--danger.choice__card--selected svg { color: #d70015; }
+:root[data-theme="dark"] .choice__card--danger.choice__card--selected { border-color: #ff6961; }
+:root[data-theme="dark"] .choice__card--danger.choice__card--selected svg { color: #ff6961; }
+
 [hidden] { display: none !important; }

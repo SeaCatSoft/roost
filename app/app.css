@@ -506,4 +506,77 @@ body { background: var(--page); }
 }
 .mixtotal--off { background: var(--warn-bg); color: var(--warn); font-weight: 500; }
 
+/* ---------- People ---------- */
+.rolebox {
+  margin-top: 1rem;
+  background: var(--page-2); border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+}
+.rolebox summary {
+  list-style: none; cursor: pointer; padding: .9rem 1.1rem;
+  font-size: .875rem; font-weight: 500;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  min-height: 44px;
+}
+.rolebox summary::-webkit-details-marker { display: none; }
+.rolebox summary::after {
+  content: ''; flex: none; width: 9px; height: 9px;
+  border-right: 1.5px solid var(--ink-3); border-bottom: 1.5px solid var(--ink-3);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform .25s var(--ease-soft);
+}
+.rolebox[open] summary::after { transform: rotate(-135deg) translate(-2px, -2px); }
+.rolebox__body { padding: 0 1.1rem 1.1rem; display: grid; gap: .6rem; }
+.rolebox__body p { font-size: .875rem; color: var(--ink-2); }
+
+.person {
+  display: flex; align-items: center; gap: .85rem;
+  padding: .9rem 1rem;
+  background: var(--page-2); border-radius: var(--r-md);
+  box-shadow: var(--shadow-1);
+  flex-wrap: wrap;
+}
+.person + .person { margin-top: .5rem; }
+
+.person__avatar {
+  width: 38px; height: 38px; flex: none; border-radius: 50%;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent); font-weight: 600; font-size: .95rem;
+}
+.person__avatar--pending {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink-3);
+}
+.person__avatar svg { width: 18px; height: 18px; }
+
+.person__main { flex: 1; min-width: 0; }
+.person__email {
+  font-size: .9375rem; font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.person__you {
+  font-size: .68rem; font-weight: 600; letter-spacing: .02em;
+  padding: .1rem .4rem; border-radius: var(--r-pill); vertical-align: 1px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent);
+}
+.person__meta { font-size: .78rem; color: var(--ink-3); margin-top: .1rem; }
+
+.person__actions { display: flex; gap: .4rem; flex: none; }
+@media (max-width: 460px) {
+  .person__actions { width: 100%; margin-left: 52px; }
+}
+
+.chip-btn {
+  min-height: 34px; padding: .3rem .75rem;
+  border-radius: var(--r-pill); cursor: pointer;
+  font-size: .8125rem; font-weight: 500; white-space: nowrap;
+  background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink-2);
+  transition: background-color .18s var(--ease-out), color .18s var(--ease-out), transform .1s var(--ease-out);
+}
+.chip-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 14%, transparent); color: var(--ink); }
+.chip-btn.is-pressed { transform: scale(.94); }
+.chip-btn:disabled { opacity: .4; cursor: default; }
+.chip-btn--danger:hover:not(:disabled) { background: color-mix(in srgb, #d70015 12%, transparent); color: #d70015; }
+
 [hidden] { display: none !important; }

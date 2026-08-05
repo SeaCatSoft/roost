@@ -713,4 +713,59 @@ body { background: var(--page); }
 @media (min-width: 520px) { .live-tally { grid-template-columns: repeat(4, 1fr); } }
 .live-tally > div { background: var(--page); padding: .8rem .75rem; display: grid; gap: .1rem; }
 
+/* ---------- Sales ---------- */
+.owed { margin-top: .75rem; }
+.owed__total { font-size: clamp(2.1rem, 8vw, 2.75rem); font-weight: 700; letter-spacing: -.03em; line-height: 1; }
+.owed__sub { margin-top: .3rem; }
+
+.ageing { margin-top: 1.1rem; display: grid; gap: .45rem; }
+.age-row { display: grid; grid-template-columns: 84px 1fr 82px; gap: .6rem; align-items: center; }
+.age-row__label { font-size: .78rem; color: var(--ink-3); }
+.age-row__track { height: 8px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--ink) 8%, transparent); overflow: hidden; }
+.age-row__fill { display: block; height: 100%; border-radius: var(--r-pill); background: var(--accent); }
+.age-row__fill.is-late { background: var(--warn); }
+.age-row__val { font-size: .8125rem; text-align: right; }
+
+.inv-state {
+  font-size: .65rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+  padding: .14rem .45rem; border-radius: var(--r-pill); vertical-align: 2px; margin-left: .35rem;
+}
+.inv-state--ok    { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.inv-state--warn  { background: var(--warn-bg); color: var(--warn); }
+.inv-state--muted { background: color-mix(in srgb, var(--ink) 9%, transparent); color: var(--ink-3); }
+
+.inv-line {
+  display: grid; grid-template-columns: 1fr 96px 92px 78px 34px;
+  gap: .4rem; align-items: center; padding: .4rem 0;
+}
+.inv-line + .inv-line { border-top: 1px solid var(--hairline-2); }
+.inv-line .setting__input { padding: .2rem .45rem; }
+.inv-line .setting__input input,
+.inv-line .setting__input select { min-height: 34px; font-size: .9rem; }
+.inv-line .setting__input select {
+  width: 100%; border: 0; background: none; font: inherit; color: var(--ink); padding: 0;
+}
+.inv-line .setting__input select:focus { outline: none; }
+.inv-line__total { font-size: .875rem; font-weight: 600; text-align: right; }
+.inv-line__x {
+  width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+  display: grid; place-items: center; color: var(--ink-3);
+  transition: background-color .18s var(--ease-out), color .18s var(--ease-out);
+}
+.inv-line__x:hover { background: color-mix(in srgb, #d70015 12%, transparent); color: #d70015; }
+.inv-line__x svg { width: 15px; height: 15px; }
+
+@media (max-width: 520px) {
+  .inv-line {
+    grid-template-columns: 1fr 1fr 34px;
+    grid-template-areas: 'prod prod x' 'qty price total';
+    row-gap: .3rem;
+  }
+  .inv-line__prod  { grid-area: prod; }
+  .inv-line__qty   { grid-area: qty; }
+  .inv-line__price { grid-area: price; }
+  .inv-line__total { grid-area: total; text-align: left; align-self: center; }
+  .inv-line__x     { grid-area: x; }
+}
+
 [hidden] { display: none !important; }

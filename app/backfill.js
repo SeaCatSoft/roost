@@ -50,9 +50,13 @@ async function boot() {
   state.lastDay = Math.max(1, Math.min(elapsed, state.cycle.target_sale_age));
 
   const [checks, bags] = await Promise.all([
+    // Only the whole-day 'DAY' session, never AM/PM — backfill has no way to
+    // ask which half of the day a paper record covers, so it stays out of
+    // days already split into sessions rather than guessing.
     db.from('daily_checks')
-      .select('day_number, mortality, culls')
-      .eq('cycle_id', state.cycle.id),
+      .select('day_number, mortality, culls, session')
+      .eq('cycle_id', state.cycle.id)
+      .eq('session', 'DAY'),
     db.from('feed_bag_openings')
       .select('opened_on')
       .eq('cycle_id', state.cycle.id)
@@ -246,6 +250,7 @@ $('saveBtn').addEventListener('click', async () => {
       checkRows.push({
         cycle_id: state.cycle.id,
         day_number: day,
+        session: 'DAY',
         checked_on: dateForDay(state.cycle.placed_on, day),
         mortality: d.mortality || 0,
         culls: d.culls || 0,
@@ -268,7 +273,7 @@ $('saveBtn').addEventListener('click', async () => {
 
     const { error } = await db
       .from('daily_checks')
-      .upsert(checkRows, { onConflict: 'cycle_id,day_number' });
+      .upsert(checkRows, { onConflict: 'cycle_id,day_number,session' });
 
     if (error) {
       btn.disabled = false;

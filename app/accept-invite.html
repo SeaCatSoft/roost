@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Join · Roost</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%231a7f37'/%3E%3Cellipse cx='46' cy='60' rx='26' ry='22' fill='%23fff'/%3E%3Ccircle cx='66' cy='38' r='14' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../assets/styles.css">
+<link rel="stylesheet" href="app.css">
+<script src="../assets/theme-init.js"></script>
+</head>
+<body>
+
+<section id="setupScreen" class="auth" hidden>
+  <h1 class="headline">Almost there</h1>
+  <p class="subhead" style="margin-inline:auto">The app needs your Supabase project details before it can connect.</p>
+</section>
+
+<section id="checkingScreen" class="auth">
+  <h1 class="headline">Roost</h1>
+  <p class="subhead" style="margin-inline:auto">Checking your invitation…</p>
+</section>
+
+<section id="expiredScreen" class="auth" hidden>
+  <h1 class="headline">This link has expired</h1>
+  <p class="subhead" style="margin-inline:auto">
+    Invite links only work once, and go stale after a while. Ask whoever
+    invited you to send a new one from People.
+  </p>
+</section>
+
+<section id="formScreen" class="auth" hidden>
+  <h1 class="headline">Welcome<span id="farmSuffix"></span></h1>
+  <p class="subhead" style="margin-inline:auto;margin-bottom:2rem">Set a password to finish joining.</p>
+
+  <div id="formError" class="banner banner--error" hidden style="text-align:left">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 8.5v5M12 17h.01"/><circle cx="12" cy="12" r="9.5"/></svg>
+    <div id="formErrorText"></div>
+  </div>
+
+  <form id="setForm">
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="new-password" minlength="8" required>
+      <span class="field__hint">At least 8 characters.</span>
+    </div>
+    <div class="field">
+      <label for="confirm">Confirm password</label>
+      <input id="confirm" type="password" autocomplete="new-password" minlength="8" required>
+    </div>
+    <button class="btn btn--primary" type="submit" id="setBtn" data-press style="width:100%;min-height:50px">
+      Join the farm
+    </button>
+  </form>
+</section>
+
+<section id="doneScreen" class="auth" hidden>
+  <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:52px;height:52px;margin:0 auto 1.25rem" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
+  <h1 class="headline">You're in</h1>
+  <p class="subhead" style="margin-inline:auto;margin-bottom:1.75rem">Taking you to the dashboard…</p>
+</section>
+
+<script type="module" src="accept-invite.js"></script>
+</body>
+</html>

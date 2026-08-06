@@ -245,31 +245,48 @@ document.querySelectorAll('[data-segment="role"] button').forEach((btn) => {
   });
 });
 
+// The Edge Function does the actual work (it holds the one key that can send
+// mail); this reads whichever shape of error it hands back. A non-2xx
+// response arrives as a FunctionsHttpError with the JSON body on
+// error.context — everything else (not deployed, no network) has no body
+// at all, so it falls back to a message that says so rather than something
+// generic.
+async function readFunctionError(error) {
+  if (error?.context?.json) {
+    try {
+      const body = await error.context.json();
+      if (body?.error) return body.error;
+    } catch { /* not JSON — fall through */ }
+  }
+  return error?.message ||
+    'Could not reach the invite function. Has invite-member been deployed in Supabase?';
+}
+
 $('inviteBtn').addEventListener('click', async () => {
   const email = $('inviteEmail').value.trim();
   if (!email) { showError('Enter an email address.'); return; }
 
   const btn = $('inviteBtn');
   btn.disabled = true;
-  btn.textContent = 'Inviting…';
+  btn.textContent = 'Sending…';
   showError(null); showOk(null);
 
-  const { error } = await db.rpc('invite_person', {
-    p_farm_id: state.farm.id,
-    p_email: email,
-    p_role: state.inviteRole
+  // Where the invite link lands once clicked — computed from wherever this
+  // page actually is, so it keeps working if the site ever moves.
+  const redirectTo = new URL('accept-invite.html', window.location.href).href;
+
+  const { data, error } = await db.functions.invoke('invite-member', {
+    body: { farm_id: state.farm.id, email, role: state.inviteRole, redirect_to: redirectTo }
   });
 
   btn.disabled = false;
   btn.textContent = 'Send invitation';
 
-  if (error) { showError(error.message); return; }
+  if (error) { showError(await readFunctionError(error)); return; }
+  if (data?.error) { showError(data.error); return; }
 
   $('inviteEmail').value = '';
-  showOk(
-    `${email} is invited as ${state.inviteRole === 'owner' ? 'an owner' : state.inviteRole === 'viewer' ? 'view-only' : 'a member'}. ` +
-    `They get access the moment they sign up with that address.`
-  );
+  showOk(`Invite email sent to ${email}.`);
   await loadInvites();
 });
 

@@ -32,3 +32,12 @@ jobs:
 
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # actions/deploy-pages defaults to a 10-minute internal timeout while
+          # it polls GitHub's Pages backend for confirmation. Several deploys
+          # on 2026-08-06 hit exactly that mark (queued -> in_progress ->
+          # timeout, per the deployment status API) and were cancelled even
+          # though nothing in the workflow itself had failed. 20 minutes gives
+          # a slow backend room to actually confirm instead of the action
+          # giving up early.
+          timeout: 1200000

@@ -154,6 +154,19 @@
       </div>
       <p class="field__hint" id="bagHint" style="margin-top:.35rem">Ties real use to the bag plan.</p>
 
+      <div class="field" id="bagCountField" hidden style="margin-top:.9rem">
+        <label for="bags">How many bags</label>
+        <div class="stepper">
+          <button class="stepper__btn" type="button" data-step="bags" data-delta="-1" data-min="1" data-press aria-label="One fewer bag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+          </button>
+          <input id="bags" name="bags" type="number" inputmode="numeric" min="1" step="1" value="1">
+          <button class="stepper__btn" type="button" data-step="bags" data-delta="1" data-min="1" data-press aria-label="One more bag">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+        </div>
+      </div>
+
       <div class="divider"></div>
 
       <div class="field">

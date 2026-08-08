@@ -182,7 +182,7 @@ body { background: var(--page); }
 /* Four columns, shared by the header and every row so they stay aligned. */
 .day-list__head, .day-row {
   display: grid;
-  grid-template-columns: 1fr 68px 68px 48px;
+  grid-template-columns: 1fr 68px 68px 68px;
   gap: .5rem;
   align-items: center;
   padding: .5rem .9rem;
@@ -224,17 +224,6 @@ body { background: var(--page); }
 .day-row__num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .day-row__num { -moz-appearance: textfield; appearance: textfield; }
 
-.bag-toggle {
-  width: 40px; height: 40px; border-radius: 11px; cursor: pointer;
-  display: grid; place-items: center;
-  color: var(--ink-3);
-  background: color-mix(in srgb, var(--ink) 7%, transparent);
-  transition: background-color .18s var(--ease-out), color .18s var(--ease-out);
-}
-.bag-toggle:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 13%, transparent); }
-.bag-toggle[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
-.bag-toggle:disabled { cursor: default; opacity: .95; }
-.bag-toggle svg { width: 18px; height: 18px; }
 
 /* ---------- Feed dashboard ---------- */
 .panel {

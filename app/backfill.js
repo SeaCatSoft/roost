@@ -25,7 +25,7 @@ const state = {
   lastDay: 1,
   saved: new Map(),   // day -> row already in the database
   draft: new Map(),   // day -> unsaved edits
-  bags: new Set()     // days that already have a bag opening recorded
+  bags: new Map()     // day number -> how many bag openings are already recorded
 };
 
 /* ---------- Load --------------------------------------------------------- */
@@ -66,10 +66,11 @@ async function boot() {
 
   (checks.data || []).forEach((r) => state.saved.set(r.day_number, r));
 
-  // Bag openings are stored by date; map them back onto day numbers.
+  // Bag openings are stored one row per bag, by date; map them back onto day
+  // numbers and count them, since a day can have opened several.
   (bags.data || []).forEach((b) => {
     const day = daysBetween(state.cycle.placed_on, b.opened_on) + 1;
-    state.bags.add(day);
+    state.bags.set(day, (state.bags.get(day) || 0) + 1);
   });
 
   render();
@@ -106,27 +107,16 @@ function render() {
     const deaths = numberInput(day, 'mortality', current ? current.mortality : '');
     const culls  = numberInput(day, 'culls', current ? current.culls : '');
 
-    const bagWrap = document.createElement('div');
-    const bag = document.createElement('button');
-    bag.type = 'button';
-    bag.className = 'bag-toggle';
-    const bagOn = draft ? !!draft.bag : state.bags.has(day);
-    bag.setAttribute('aria-pressed', String(bagOn));
-    bag.setAttribute('aria-label', `Feed bag opened on day ${day}`);
-    bag.disabled = state.bags.has(day);   // already recorded; not removable here
-    bag.innerHTML =
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<path d="M5 8h14l-1.2 11a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8L5 8Z"/><path d="M9 8V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V8"/></svg>';
-    bag.addEventListener('click', () => {
-      const d = ensureDraft(day);
-      d.bag = !d.bag;
-      bag.setAttribute('aria-pressed', String(d.bag));
-      row.classList.add('is-dirty');
-      refreshTotals();
-    });
-    bagWrap.appendChild(bag);
+    // A count, not a yes/no: a paper record can easily show three bags on one
+    // day. Days that already have bags start at that number — this screen adds
+    // bags, it has never removed them.
+    const already = state.bags.get(day) || 0;
+    const bags = numberInput(day, 'bag', draft ? draft.bag : (already || ''));
+    if (already) {
+      bags.title = `${already} already recorded. Raise this to add more; lowering it removes nothing.`;
+    }
 
-    row.append(label, deaths, culls, bagWrap);
+    row.append(label, deaths, culls, bags);
     frag.appendChild(row);
   }
 
@@ -135,6 +125,8 @@ function render() {
   $('dayList').hidden = false;
   refreshTotals();
 }
+
+const FIELD_LABEL = { mortality: 'Deaths', culls: 'Culls', bag: 'Bags opened' };
 
 function numberInput(day, field, value) {
   const input = document.createElement('input');
@@ -145,7 +137,7 @@ function numberInput(day, field, value) {
   input.className = 'day-row__num';
   input.value = value === null || value === undefined ? '' : value;
   input.placeholder = '–';
-  input.setAttribute('aria-label', `${field === 'mortality' ? 'Deaths' : 'Culls'} on day ${day}`);
+  input.setAttribute('aria-label', `${FIELD_LABEL[field]} on day ${day}`);
 
   input.addEventListener('input', () => {
     const d = ensureDraft(day);
@@ -163,7 +155,7 @@ function ensureDraft(day) {
     state.draft.set(day, {
       mortality: saved ? saved.mortality : null,
       culls: saved ? saved.culls : null,
-      bag: state.bags.has(day)
+      bag: state.bags.get(day) || 0
     });
   }
   return state.draft.get(day);
@@ -257,7 +249,12 @@ $('saveBtn').addEventListener('click', async () => {
         recorded_by: session?.user?.id ?? null
       });
     }
-    if (d.bag && !state.bags.has(day)) {
+    // Only the shortfall gets written, so re-saving a day already holding two
+    // bags adds nothing. A lower number is not a deletion — this screen has
+    // never removed bag records and does not start now.
+    const have = state.bags.get(day) || 0;
+    const want = d.bag || 0;
+    for (let i = 0; i < want - have; i++) {
       bagRows.push({
         cycle_id: state.cycle.id,
         opened_on: dateForDay(state.cycle.placed_on, day),

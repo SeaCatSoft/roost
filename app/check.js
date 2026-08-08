@@ -126,7 +126,10 @@ document.querySelectorAll('[data-step]').forEach((btn) => {
   btn.addEventListener('click', () => {
     const input = $(btn.getAttribute('data-step'));
     const delta = parseInt(btn.getAttribute('data-delta'), 10);
-    input.value = Math.max(0, (parseInt(input.value, 10) || 0) + delta);
+    // Most counts can fall to zero; a bag count cannot, because the switch
+    // being on already means at least one was opened.
+    const min = parseInt(btn.getAttribute('data-min'), 10) || 0;
+    input.value = Math.max(min, (parseInt(input.value, 10) || 0) + delta);
   });
 });
 
@@ -134,6 +137,11 @@ document.querySelectorAll('[data-step]').forEach((btn) => {
 $('bagSwitch').addEventListener('click', () => {
   state.bagOpened = !state.bagOpened;
   $('bagSwitch').setAttribute('aria-checked', String(state.bagOpened));
+
+  // The count only means anything while the switch is on. Reset it each time
+  // so yesterday's four bags never ride along into a day that opened one.
+  $('bagCountField').hidden = !state.bagOpened;
+  if (state.bagOpened) $('bags').value = '1';
 });
 
 /* ---------- Load ---------------------------------------------------------- */
@@ -266,16 +274,27 @@ $('checkForm').addEventListener('submit', async (e) => {
   }
 
   if (state.bagOpened) {
-    const { error: bagErr } = await db.from('feed_bag_openings').insert({
-      cycle_id: state.cycle.id,
-      opened_on: today(),
-      phase: phaseForDay(state.dayNumber)
-    });
+    const bags = Math.max(1, parseInt($('bags').value, 10) || 1);
 
-    if (bagErr) showAppError(`Check saved, but the bag was not recorded: ${bagErr.message}`);
+    // One row per bag, never one row carrying a quantity: every figure in the
+    // app counts these rows (v_cycle_summary, the feed dashboard), so a
+    // quantity column would be invisible to all of them.
+    const { error: bagErr } = await db.from('feed_bag_openings').insert(
+      Array.from({ length: bags }, () => ({
+        cycle_id: state.cycle.id,
+        opened_on: today(),
+        phase: phaseForDay(state.dayNumber)
+      }))
+    );
+
+    if (bagErr) {
+      showAppError(`Check saved, but the ${bags === 1 ? 'bag was' : 'bags were'} not recorded: ${bagErr.message}`);
+    }
 
     state.bagOpened = false;
     $('bagSwitch').setAttribute('aria-checked', 'false');
+    $('bagCountField').hidden = true;
+    $('bags').value = '1';
   }
 
   btn.disabled = false;

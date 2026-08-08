@@ -92,3 +92,30 @@ fail with "already registered" — `inviteUserByEmail` doesn't cleanly resend.
 The function reports this plainly rather than pretending it worked; the
 `farm_invites` row is still saved either way, so the person gets access the
 moment they have any account with that email, invite email or not.
+
+**If you hit the rate limit and are tempted to add the user directly from
+Authentication → Users in the Supabase dashboard instead — that will not
+grant them access to anything.** Farm access is not "having a login," it's
+a row in `farm_members`, and that row is only ever created one way: a
+sign-up trigger matches the new account's email against `farm_invites` and
+inserts it automatically. Adding a user by hand in the dashboard skips
+`invite_person()` entirely, so there's no `farm_invites` row for the
+trigger to match — the account exists, the login works, and they see
+nothing, on every screen, with no error to explain why.
+
+If you've already done this, don't redo it through People — that writes to
+`farm_invites`, not `farm_members`, and the trigger that bridges the two
+only fires on new sign-up, not on an account that already exists. Grant
+the existing account access directly instead:
+
+```sql
+insert into farm_members (farm_id, user_id, role)
+select f.id, u.id, 'member'  -- or 'owner' / 'viewer'
+from farms f, auth.users u
+where u.email in ('person@example.com')
+on conflict (farm_id, user_id) do nothing;
+```
+
+If the rate limit itself is the real problem, that's what custom SMTP
+above is for — it removes the reason to reach for the dashboard shortcut
+in the first place.

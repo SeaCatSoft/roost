@@ -42,7 +42,7 @@ async function boot() {
   show('app');
   showError(null);
 
-  const { data: farms } = await db.from('farms').select('id, name').limit(1);
+  const { data: farms } = await db.from('farms').select('id, name').order('id').limit(1);
   if (!farms || !farms.length) { showError('No farm is linked to this account yet.'); return; }
   state.farm = farms[0];
   $('farmName').textContent = state.farm.name;

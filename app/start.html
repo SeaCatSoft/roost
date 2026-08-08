@@ -161,6 +161,41 @@
         </div>
       </div>
 
+      <!-- Assumptions: carry the last cycle's figures, or begin from defaults -->
+      <div class="panel" id="assumptionsPanel" hidden style="margin-top:1.25rem">
+        <h2 class="panel__title">Costs and prices</h2>
+        <p class="caption" style="margin-top:.25rem;margin-bottom:1rem">
+          Feed prices, chick cost, processing fees, the price list and the
+          feed curve — all of it, from <span id="assumptionsFrom">the last cycle</span>.
+        </p>
+
+        <div class="choice choice--tight">
+          <button type="button" class="choice__card choice__card--selected" data-assumptions="carry" data-press>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5h11M8 12h11M8 19h11"/><path d="M4 5h.01M4 12h.01M4 19h.01"/></svg>
+            <span>
+              <strong>Carry them over</strong>
+              <em>Same figures as last time. Edit any of them later. Recommended.</em>
+            </span>
+          </button>
+
+          <button type="button" class="choice__card" data-assumptions="fresh" data-press>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg>
+            <span>
+              <strong>Start from scratch</strong>
+              <em>Begin at the standard defaults and enter this cycle's own figures.</em>
+            </span>
+          </button>
+        </div>
+
+        <div class="banner banner--warn" id="freshNote" hidden style="margin-top:1rem">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 8.5v5M12 17h.01"/><circle cx="12" cy="12" r="9.5"/></svg>
+          <div>
+            Your price list starts empty, so the money figures stay blank until
+            you fill in Assumptions. Nothing is invented for you.
+          </div>
+        </div>
+      </div>
+
       <div class="save-bar">
         <button class="btn btn--primary" type="button" id="createBtn" data-press>Start the cycle</button>
       </div>

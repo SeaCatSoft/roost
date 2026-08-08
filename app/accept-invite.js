@@ -24,7 +24,7 @@ async function boot() {
   const { data: { session } } = await db.auth.getSession();
   if (!session) { show('expired'); return; }
 
-  const { data: farms } = await db.from('farms').select('name').limit(1);
+  const { data: farms } = await db.from('farms').select('name').order('id').limit(1);
   $('farmSuffix').textContent = farms?.[0]?.name ? ` to ${farms[0].name}` : '';
 
   show('form');

@@ -18,6 +18,7 @@ const screens = { setup: $('setupScreen'), auth: $('authScreen'), app: $('appScr
 const show = (n) => Object.entries(screens).forEach(([k, el]) => { el.hidden = k !== n; });
 const showError = (m) => banner($('appError'), $('appErrorText'), m);
 const showAuthError = (m) => banner($('authError'), $('authErrorText'), m);
+const showAuthOk = (m) => banner($('authOk'), $('authOkText'), m);
 
 if (!isConfigured) { show('setup'); throw new Error('Supabase is not configured'); }
 
@@ -57,16 +58,76 @@ const el = (tag, attrs, text) => {
 };
 
 /* ---------- Auth ---------------------------------------------------------- */
+/* Two modes on one form. Signing up creates a farm and makes you its owner;
+   joining an existing farm happens through an invitation link instead, never
+   here, or two people would each own a farm while believing they shared one. */
+let authMode = 'signin';
+
+document.querySelectorAll('[data-segment="mode"] button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    authMode = btn.getAttribute('data-value');
+    document.querySelectorAll('[data-segment="mode"] button').forEach((b) =>
+      b.setAttribute('aria-pressed', String(b === btn)));
+
+    const signingUp = authMode === 'signup';
+    $('farmNameField').hidden = !signingUp;
+    $('farmName').required = signingUp;
+    $('password').autocomplete = signingUp ? 'new-password' : 'current-password';
+    $('authSubhead').textContent = signingUp
+      ? 'Name your farm and you are in.'
+      : 'Sign in to your farm.';
+    $('signInBtn').textContent = signingUp ? 'Create my farm' : 'Sign in';
+    $('inviteHint').hidden = !signingUp;
+    showAuthError(null);
+    showAuthOk(null);
+  });
+});
+
 $('authForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   showAuthError(null);
+  showAuthOk(null);
+
   const btn = $('signInBtn');
+  const email = $('email').value.trim();
+  const password = $('password').value;
+
+  if (authMode === 'signup') {
+    const farmName = $('farmName').value.trim();
+    if (!farmName) { showAuthError('Give your farm a name.'); return; }
+
+    btn.disabled = true; btn.textContent = 'Creating…';
+
+    // The farm itself is created by a database trigger reading this name, so
+    // the farm and its owner appear together or not at all.
+    const { data, error } = await db.auth.signUp({
+      email,
+      password,
+      options: { data: { farm_name: farmName } }
+    });
+
+    btn.disabled = false; btn.textContent = 'Create my farm';
+
+    if (error) {
+      showAuthError(error.message.match(/already registered/i)
+        ? 'That email already has an account. Sign in instead.'
+        : error.message);
+      return;
+    }
+
+    // With email confirmation switched on there is no session yet, and saying
+    // "you're in" when they are not is worse than saying nothing.
+    if (!data.session) {
+      showAuthOk(`Check ${email} for a link to confirm the account, then sign in.`);
+      return;
+    }
+    boot();
+    return;
+  }
+
   btn.disabled = true; btn.textContent = 'Signing in…';
 
-  const { error } = await db.auth.signInWithPassword({
-    email: $('email').value.trim(),
-    password: $('password').value
-  });
+  const { error } = await db.auth.signInWithPassword({ email, password });
 
   btn.disabled = false; btn.textContent = 'Sign in';
   if (error) {

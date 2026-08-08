@@ -30,7 +30,7 @@ async function boot() {
   show('app');
   showError(null);
 
-  const { data: farms, error: farmErr } = await db.from('farms').select('id, name').limit(1);
+  const { data: farms, error: farmErr } = await db.from('farms').select('id, name').order('id').limit(1);
   if (farmErr || !farms || !farms.length) {
     showError('No farm is linked to this account yet.');
     return;

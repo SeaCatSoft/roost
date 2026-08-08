@@ -27,14 +27,31 @@
 
 <section id="authScreen" class="auth" hidden>
   <h1 class="headline">Roost</h1>
-  <p class="subhead" style="margin-inline:auto;margin-bottom:2rem">Sign in to your farm.</p>
+  <p class="subhead" style="margin-inline:auto;margin-bottom:1.5rem" id="authSubhead">Sign in to your farm.</p>
+
+  <div class="segment" data-segment="mode" style="margin-bottom:1.5rem">
+    <button type="button" data-value="signin" aria-pressed="true" data-press>Sign in</button>
+    <button type="button" data-value="signup" aria-pressed="false" data-press>Start a farm</button>
+  </div>
 
   <div id="authError" class="banner banner--error" hidden style="text-align:left">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 8.5v5M12 17h.01"/><circle cx="12" cy="12" r="9.5"/></svg>
     <div id="authErrorText"></div>
   </div>
 
+  <div id="authOk" class="banner banner--ok" hidden style="text-align:left">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+    <div id="authOkText"></div>
+  </div>
+
   <form id="authForm">
+    <div class="field" id="farmNameField" hidden>
+      <label for="farmName">Farm name</label>
+      <input id="farmName" type="text" autocomplete="organization" placeholder="Goddard's Farm">
+      <p class="field__hint" style="margin-top:.35rem">
+        You'll own this farm and can invite the rest of your people once you're in.
+      </p>
+    </div>
     <div class="field">
       <label for="email">Email</label>
       <input id="email" type="email" autocomplete="username" required>
@@ -45,6 +62,11 @@
     </div>
     <button class="btn btn--primary" type="submit" id="signInBtn" data-press style="width:100%;min-height:50px">Sign in</button>
   </form>
+
+  <p class="caption" id="inviteHint" hidden style="margin-top:1.25rem">
+    Been invited to a farm? Use the link in your invitation email instead —
+    signing up here would start a second, separate farm.
+  </p>
 </section>
 
 <div id="appScreen" hidden>

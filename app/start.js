@@ -23,7 +23,7 @@ if (!isConfigured) { show('setup'); throw new Error('Supabase is not configured'
 const steps = { existing: $('existingStep'), form: $('formStep'), done: $('doneStep') };
 const step = (n) => Object.entries(steps).forEach(([k, el]) => { el.hidden = k !== n; });
 
-const state = { farmId: null, current: null, disposal: 'archive' };
+const state = { farmId: null, current: null, disposal: 'archive', assumptions: 'carry' };
 
 const fmt = (n) => Number(n).toLocaleString('en-US');
 
@@ -61,7 +61,7 @@ async function boot() {
   show('app');
   showError(null);
 
-  const { data: farms, error: farmErr } = await db.from('farms').select('id, name').limit(1);
+  const { data: farms, error: farmErr } = await db.from('farms').select('id, name').order('id').limit(1);
   if (farmErr || !farms || !farms.length) {
     showError('No farm is linked to this account yet.');
     return;
@@ -109,6 +109,15 @@ document.querySelectorAll('[data-disposal]').forEach((btn) => {
   });
 });
 
+document.querySelectorAll('[data-assumptions]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    state.assumptions = btn.getAttribute('data-assumptions');
+    document.querySelectorAll('[data-assumptions]').forEach((b) =>
+      b.classList.toggle('choice__card--selected', b === btn));
+    $('freshNote').hidden = state.assumptions !== 'fresh';
+  });
+});
+
 $('confirmInput').addEventListener('input', updateCreateButton);
 
 function updateCreateButton() {
@@ -147,6 +156,28 @@ async function prepareForm() {
       `${counts.weights} weighing${counts.weights === 1 ? '' : 's'}. There is no undo.`;
   } else {
     $('disposalPanel').hidden = true;
+  }
+
+  // The choice only means something when there is a previous cycle to copy —
+  // and that includes closed ones, which is why this asks the table rather
+  // than reusing the open cycle above.
+  const { data: prev } = await db
+    .from('cycles')
+    .select('label')
+    .eq('farm_id', state.farmId)
+    .order('placed_on', { ascending: false })
+    .limit(1);
+
+  const previous = prev && prev.length ? prev[0] : null;
+  $('assumptionsPanel').hidden = !previous;
+  if (previous) {
+    $('assumptionsFrom').textContent = previous.label;
+    // Always reopen on the safe option rather than remembering a one-off
+    // "from scratch" from a previous visit to this screen.
+    state.assumptions = 'carry';
+    document.querySelectorAll('[data-assumptions]').forEach((b) =>
+      b.classList.toggle('choice__card--selected', b.getAttribute('data-assumptions') === 'carry'));
+    $('freshNote').hidden = true;
   }
 
   updateCreateButton();
@@ -201,7 +232,8 @@ $('createBtn').addEventListener('click', async () => {
     p_birds_placed: birds,
     p_placed_on: placed,
     p_breed: breed,
-    p_target_age: age
+    p_target_age: age,
+    p_carry_over: state.assumptions === 'carry'
   });
 
   if (error) {
@@ -216,7 +248,10 @@ $('createBtn').addEventListener('click', async () => {
     `${fmt(birds)} birds · ${age} day grow-out` +
     (state.current
       ? ` · ${state.current.label} ${state.disposal === 'delete' ? 'deleted' : 'closed and kept'}`
-      : '');
+      : '') +
+    ($('assumptionsPanel').hidden
+      ? ''
+      : ` · costs and prices ${state.assumptions === 'carry' ? 'carried over' : 'from scratch'}`);
   step('done');
   window.scrollTo({ top: 0, behavior: 'auto' });
   void newId;

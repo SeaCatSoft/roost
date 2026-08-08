@@ -48,7 +48,8 @@
         <svg class="moon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
       </button>
       <a class="nav__signin" href="app/" data-press>Sign in</a>
-      <a class="btn btn--primary nav__cta" href="app/start.html" data-press>Start a cycle</a>
+      <a class="btn btn--primary nav__cta" href="app/" data-press
+         data-start-cta data-in-href="app/start.html" data-in-text="Start a cycle">Start your farm</a>
     </div>
   </div>
 </header>
@@ -65,7 +66,8 @@
   </p>
 
   <div class="hero__actions" data-reveal data-reveal-delay="180">
-    <a class="btn btn--primary" href="app/start.html" data-press>Start your first cycle</a>
+    <a class="btn btn--primary" href="app/" data-press
+       data-start-cta data-in-href="app/start.html" data-in-text="Start your first cycle">Start your farm</a>
     <a class="btn btn--quiet" href="#cycle" data-press>
       Watch a cycle run
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
@@ -554,7 +556,8 @@
     read it and tell you what it has been hiding.
   </p>
   <div class="hero__actions" data-reveal data-reveal-delay="140">
-    <a class="btn btn--primary" href="app/start.html" data-press>Start your first cycle</a>
+    <a class="btn btn--primary" href="app/" data-press
+       data-start-cta data-in-href="app/start.html" data-in-text="Start your first cycle">Start your farm</a>
     <a class="btn btn--quiet" href="#capabilities" data-press>
       See what it tracks
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
@@ -591,7 +594,7 @@
         <h4>Farm</h4>
         <ul>
           <li><a href="app/">Sign in</a></li>
-          <li><a href="app/start.html">Start a cycle</a></li>
+          <li><a href="app/" data-start-cta data-in-href="app/start.html" data-in-text="Start a cycle">Start your farm</a></li>
           <li><a href="#figures">Breakeven</a></li>
           <li><a href="#roadmap">Invoicing</a></li>
         </ul>
@@ -605,5 +608,6 @@
 </footer>
 
 <script src="assets/motion.js"></script>
+<script type="module" src="assets/session-cta.js"></script>
 </body>
 </html>

@@ -31,6 +31,32 @@ Push to `main`, then in the repository go to **Settings → Pages** and set
 **Source** to **GitHub Actions**. The included workflow uploads the repository root
 and deploys it — there is nothing to build.
 
+## Supabase auth URLs — the setting that breaks email links
+
+Every link Supabase emails — sign-up confirmations, invitations, password
+resets — is built from settings in **Authentication → URL Configuration**, not
+from anything in this repository. Get these wrong and the emails still arrive,
+but the links land nowhere. That failure looks like a broken app and is
+actually one text field.
+
+**Site URL** — the fallback every email link uses. It defaults to
+`http://localhost:3000`, which cannot work for anyone. Set it to:
+
+```
+https://seacatsoft.github.io/roost/app/
+```
+
+**Redirect URLs** — an allow-list. A `redirectTo` the app asks for is
+*ignored* unless it appears here, silently falling back to the Site URL. One
+wildcard entry covers the whole app:
+
+```
+https://seacatsoft.github.io/roost/**
+```
+
+The app asks for `app/` on sign-up and `app/accept-invite.html` on invitations,
+so list those individually if you would rather not use a wildcard.
+
 ## Where the numbers come from
 
 Every figure on the page is computed from `broiler_whole_and_parts_planner.xlsx`

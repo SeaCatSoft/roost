@@ -83,6 +83,45 @@ document.querySelectorAll('[data-segment="mode"] button').forEach((btn) => {
   });
 });
 
+/* After signing up there is nothing to do but confirm the email, so the form
+   gets out of the way and says so. The credentials are deliberately left in
+   the form rather than cleared: the way back is a view change, not a page
+   load, so once they have clicked the link in the email the password is still
+   there and signing in is one press. */
+let confirmTimer = null;
+
+function awaitConfirmation(email, farmName) {
+  $('authForm').hidden = true;
+  document.querySelector('[data-segment="mode"]').hidden = true;
+  $('authSubhead').hidden = true;
+  $('confirmEmail').textContent = email;
+  $('confirmFarm').textContent = `${farmName} is created.`;
+  $('confirmPanel').hidden = false;
+  $('inviteHint').hidden = true;
+
+  let left = 20;
+  $('confirmCount').textContent = left;
+  clearInterval(confirmTimer);
+  confirmTimer = setInterval(() => {
+    left -= 1;
+    $('confirmCount').textContent = Math.max(0, left);
+    if (left <= 0) backToSignIn();
+  }, 1000);
+}
+
+function backToSignIn() {
+  clearInterval(confirmTimer);
+  confirmTimer = null;
+  $('confirmPanel').hidden = true;
+  $('authForm').hidden = false;
+  document.querySelector('[data-segment="mode"]').hidden = false;
+  $('authSubhead').hidden = false;
+  document.querySelector('[data-segment="mode"] button[data-value="signin"]').click();
+  showAuthOk('Confirm the email, then sign in — your details are still here.');
+}
+
+$('backToSignIn').addEventListener('click', backToSignIn);
+
 $('authForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   showAuthError(null);
@@ -100,10 +139,19 @@ $('authForm').addEventListener('submit', async (e) => {
 
     // The farm itself is created by a database trigger reading this name, so
     // the farm and its owner appear together or not at all.
+    //
+    // emailRedirectTo is set explicitly because the confirmation link
+    // otherwise goes to the project's Site URL, which defaults to localhost —
+    // a link that cannot possibly work for anyone. This sends them to this
+    // app, where supabase-js reads the tokens out of the URL and signs them
+    // in on arrival.
     const { data, error } = await db.auth.signUp({
       email,
       password,
-      options: { data: { farm_name: farmName } }
+      options: {
+        data: { farm_name: farmName },
+        emailRedirectTo: new URL('./', window.location.href).href
+      }
     });
 
     btn.disabled = false; btn.textContent = 'Create my farm';
@@ -118,7 +166,7 @@ $('authForm').addEventListener('submit', async (e) => {
     // With email confirmation switched on there is no session yet, and saying
     // "you're in" when they are not is worse than saying nothing.
     if (!data.session) {
-      showAuthOk(`Check ${email} for a link to confirm the account, then sign in.`);
+      awaitConfirmation(email, farmName);
       return;
     }
     boot();
@@ -152,6 +200,13 @@ async function boot() {
   show('app');
   showError(null);
 
+  // Which farm this is, before anything else. A farm with no cycle yet still
+  // has a name, and the load below returns early in that case — so asking for
+  // it afterwards would leave a brand new farm with nothing on screen naming
+  // it at all.
+  const { data: farms } = await db.from('farms').select('id, name').order('id').limit(1);
+  if (farms && farms.length) $('barTitle').textContent = farms[0].name;
+
   let cycle;
   try { cycle = await loadOpenCycle(); }
   catch (e) {
@@ -163,7 +218,9 @@ async function boot() {
   const day = Math.max(1, Math.min(
     daysBetween(cycle.placed_on, today()) + 1, cycle.target_sale_age));
 
-  $('barTitle').textContent = cycle.label;
+  // The bar keeps the farm name — with more than one farm in the project, that
+  // is the thing worth being certain of at a glance. The cycle names itself in
+  // its own panel just below.
   $('cycleTitle').textContent = cycle.label;
   $('dayBig').textContent = `Day ${day}`;
   $('dayOf').textContent = `of ${cycle.target_sale_age}`;

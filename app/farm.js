@@ -61,12 +61,13 @@ async function boot() {
   $('barTitle').textContent = state.farm.name;
   $('farmTitle').textContent = state.farm.name;
 
-  const [ageing, balances, unsent, cycles] = await Promise.all([
+  const [ageing, balances, unsent, cycles, book] = await Promise.all([
     db.from('v_invoice_ageing').select('*').maybeSingle(),
     db.from('v_customer_balances').select('*'),
     db.from('v_unsent_invoices').select('*').order('issued_on', { ascending: false }),
     db.from('cycles').select('id, label, placed_on, birds_placed, target_sale_age, closed_at')
-      .order('placed_on', { ascending: false }).limit(1)
+      .order('placed_on', { ascending: false }).limit(1),
+    db.from('v_order_book').select('*').maybeSingle()
   ]);
 
   if (unsent.error && unsent.error.message.includes('does not exist')) {
@@ -75,6 +76,7 @@ async function boot() {
   }
 
   renderOwed(ageing.data, balances.data || []);
+  renderBook(book.data);
   renderUnsent(unsent.data || []);
 
   state.cycle = cycles.data && cycles.data.length ? cycles.data[0] : null;
@@ -128,6 +130,25 @@ function renderOwed(a, balances) {
   $('worstNote').textContent = worst && Number(worst.worst_overdue ?? 0) > 0
     ? `Longest waiting: ${worst.name}, ${money(worst.outstanding)} at ${num(worst.worst_overdue)} days past due.`
     : (total > 0 ? 'Nothing is past its due date yet.' : '');
+}
+
+/* ---------- On order ------------------------------------------------------- */
+/* Confirmed is what the farm is actually committed to delivering. Drafts are
+   shown separately because a draft holds no stock and nobody is expecting it. */
+function renderBook(b) {
+  $('bookStats').innerHTML =
+    `<div><div class="metric__k">Confirmed</div><div class="metric__v tnum">${money(b?.confirmed_value)}</div></div>
+     <div><div class="metric__k">Drafts</div><div class="metric__v tnum">${num(b?.drafts)}</div></div>
+     <div><div class="metric__k">Late</div><div class="metric__v tnum" style="color:${
+       Number(b?.overdue ?? 0) > 0 ? 'var(--warn)' : 'inherit'}">${num(b?.overdue)}</div></div>`;
+
+  const parts = [];
+  if (Number(b?.confirmed_lb ?? 0) > 0) parts.push(`${num(b.confirmed_lb, 1)} lb promised.`);
+  if (b?.next_needed_by) parts.push(`Next delivery due ${shortDate(b.next_needed_by)}.`);
+  if (Number(b?.overdue ?? 0) > 0) {
+    parts.push('Something is past its delivery date — that is a customer waiting, not a number.');
+  }
+  $('bookNote').textContent = parts.join(' ') || 'Nothing on order.';
 }
 
 /* ---------- Raised, not yet sent ------------------------------------------ */

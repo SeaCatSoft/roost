@@ -46,6 +46,18 @@ body { background: var(--page); }
 }
 .field__hint { font-size: .75rem; color: var(--ink-3); }
 
+/* One weight at a time, so a phone keeps its number pad and never needs a
+   space bar. The input keeps the .field styling; only the row is laid out. */
+.quick-add { display: flex; gap: .6rem; align-items: stretch; }
+.quick-add input { flex: 1; min-width: 0; }
+.quick-add .btn { flex: none; min-height: 48px; padding-inline: 1.4rem; }
+/* Spinners eat width on a narrow phone and are useless next to a scale. */
+.quick-add input::-webkit-outer-spin-button,
+.quick-add input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.quick-add input { -moz-appearance: textfield; appearance: textfield; }
+
+.field__count { float: right; font-weight: 400; color: var(--ink-3); }
+
 /* ---------- Status banner ---------- */
 .banner {
   display: flex; gap: .65rem; align-items: flex-start;

@@ -104,12 +104,27 @@
       </div>
 
       <div class="field">
-        <label for="weightsInput">Each bird's weight</label>
-        <textarea id="weightsInput" inputmode="decimal"
-          placeholder="Type each weight, separated by a space."></textarea>
+        <label for="oneWeight">Each bird's weight</label>
+        <div class="quick-add">
+          <input id="oneWeight" type="number" inputmode="decimal" min="0" step="0.01"
+                 placeholder="Weigh a bird, then Add">
+          <button class="btn btn--glass" type="button" id="addWeightBtn" data-press>Add</button>
+        </div>
         <span class="field__hint">
-          Weigh ten or more birds from different parts of the house — a sample from one
+          One bird at a time — the number pad stays up, so you never need a space bar.
+          Weigh ten or more from different parts of the house: a sample from one
           corner tells you about that corner, not the flock.
+        </span>
+      </div>
+
+      <div class="field">
+        <label for="weightsInput">
+          Added so far <span class="field__count tnum" id="addedCount"></span>
+        </label>
+        <textarea id="weightsInput"
+          placeholder="Or type them all here, separated by spaces or commas."></textarea>
+        <span class="field__hint">
+          Edit this directly to fix a mistake. Spaces, commas and new lines all work.
         </span>
       </div>
 

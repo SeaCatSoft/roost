@@ -205,6 +205,37 @@ document.querySelectorAll('[data-segment="unit"] button').forEach((btn) => {
 $('weightsInput').addEventListener('input', recalc);
 $('dayInput').addEventListener('input', recalc);
 
+/* ---------- One at a time -------------------------------------------------
+   A phone showing a number pad has no space bar, which made the all-at-once
+   box impossible to type into on the very device it gets used on. Adding one
+   weight per tap keeps the pad up and never needs a separator. The box below
+   still holds everything, so a mistake is fixed by editing it directly. */
+function addOneWeight() {
+  const field = $('oneWeight');
+  const raw = field.value.trim();
+  const n = Number(raw);
+
+  if (!raw || !Number.isFinite(n) || n <= 0) {
+    field.focus();
+    return;
+  }
+
+  const box = $('weightsInput');
+  const existing = box.value.trim();
+  box.value = existing ? `${existing} ${raw}` : raw;
+
+  field.value = '';
+  field.focus();          // keeps the number pad open for the next bird
+  recalc();
+}
+
+$('addWeightBtn').addEventListener('click', addOneWeight);
+
+/* Enter adds too — a bench scale that types for you sends one. */
+$('oneWeight').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); addOneWeight(); }
+});
+
 function parseWeights(text) {
   return text
     .split(/[\s,;]+/)
@@ -224,6 +255,11 @@ function recalc() {
   const tally = $('tally');
   const warn = $('tallyWarn');
   const btn = $('saveBtn');
+
+  // Confirms each tap landed, without having to count the box by eye.
+  $('addedCount').textContent = state.weights.length
+    ? `${state.weights.length} bird${state.weights.length === 1 ? '' : 's'}`
+    : '';
 
   if (!state.weights.length) {
     tally.hidden = true;
@@ -303,6 +339,8 @@ $('saveBtn').addEventListener('click', async () => {
   }
 
   $('weightsInput').value = '';
+  $('oneWeight').value = '';
+  $('addedCount').textContent = '';
   state.weights = [];
   $('tally').hidden = true;
   $('tallyWarn').hidden = true;

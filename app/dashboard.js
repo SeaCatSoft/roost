@@ -11,7 +11,8 @@
    ========================================================================== */
 
 import {
-  db, isConfigured, $, today, daysBetween, banner, loadOpenCycle
+  db, isConfigured, $, today, daysBetween, banner, loadOpenCycle,
+  myRole, standardWeightAt as standardAt
 } from './db.js';
 
 const screens = { setup: $('setupScreen'), auth: $('authScreen'), app: $('appScreen') };
@@ -26,10 +27,6 @@ const NS = 'http://www.w3.org/2000/svg';
 const LB_PER_KG = 0.45359237;
 const FCR_LOW = 1.55, FCR_HIGH = 1.65;
 
-/* Ross 308 as-hatched objective, grams by day — the same table the weights
-   screen uses, so an estimated conversion here matches one shown there. */
-const STANDARD = { 0: 42, 7: 185, 14: 465, 21: 940, 28: 1560, 35: 2270, 42: 2980 };
-
 const num = (n, d = 0) =>
   Number(n ?? 0).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 
@@ -39,16 +36,6 @@ const money = (v) => {
   return (n < 0 ? '−$' : '$') + s;
 };
 
-function standardAt(day) {
-  const keys = Object.keys(STANDARD).map(Number).sort((a, b) => a - b);
-  if (day <= keys[0]) return STANDARD[keys[0]];
-  if (day >= keys[keys.length - 1]) return STANDARD[keys[keys.length - 1]];
-  for (let i = 0; i < keys.length - 1; i++) {
-    const a = keys[i], b = keys[i + 1];
-    if (day >= a && day <= b) return STANDARD[a] + (STANDARD[b] - STANDARD[a]) * ((day - a) / (b - a));
-  }
-  return null;
-}
 
 const el = (tag, attrs, text) => {
   const n = document.createElementNS(NS, tag);
@@ -197,8 +184,25 @@ async function boot() {
   const { data: { session } } = await db.auth.getSession();
   if (!session) { show('auth'); return; }
 
+  // Owners land on My Farm — the money and the plan are what they open the app
+  // for. ?flock=1 is how they get here deliberately, and is what every link
+  // back from My Farm carries, so this cannot become a redirect loop.
+  const role = await myRole();
+  const wantsFlock = new URLSearchParams(window.location.search).has('flock');
+  if (role === 'owner' && !wantsFlock) {
+    window.location.replace('farm.html');
+    return;
+  }
+
   show('app');
   showError(null);
+
+  // Owner-only screens are hidden from everyone else. The database refuses
+  // them regardless (016); this is so nobody is offered a door that is locked.
+  if (role !== 'owner') {
+    document.querySelectorAll('[data-owner-only]').forEach((el) => { el.hidden = true; });
+  }
+  $('farmTile').hidden = role !== 'owner';
 
   // Which farm this is, before anything else. A farm with no cycle yet still
   // has a name, and the load below returns early in that case — so asking for

@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Roost — migration audit
 --
--- Not a migration. Checks which of 001-015 have actually been applied, by
+-- Not a migration. Checks which of 001-016 have actually been applied, by
 -- looking for one distinctive object each creates. Run this any time you are
 -- unsure what state the database is in.
 --
@@ -26,6 +26,8 @@ select * from (values
   ('012_sales',                to_regclass('public.invoices') is not null and to_regprocedure('public.save_invoice(bigint,bigint,date,date,jsonb,bigint,bigint,text,bigint,text)') is not null),
   ('013_followups',            to_regclass('public.invoice_followups') is not null and to_regclass('public.v_followup_candidates') is not null),
   ('014_check_log',            to_regprocedure('public.cycle_check_log(bigint)') is not null),
-  ('015_multi_farm',           to_regprocedure('public.start_new_cycle(bigint,text,integer,date,text,integer,bigint,boolean)') is not null)
+  ('015_multi_farm',           to_regprocedure('public.start_new_cycle(bigint,text,integer,date,text,integer,bigint,boolean)') is not null),
+  ('016_owner_only',           to_regprocedure('public.can_own_cycle(bigint)') is not null
+                           and to_regclass('public.v_unsent_invoices') is not null)
 ) as t(migration, applied)
 order by migration;

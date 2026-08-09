@@ -9,7 +9,7 @@
 
 import {
   db, isConfigured, $, today, daysBetween, banner, loadOpenCycle,
-  myRole, canEdit, lockForViewer
+  myRole, canEdit, lockForViewer, standardWeightAt as standardAt
 } from './db.js';
 
 const screens = { setup: $('setupScreen'), auth: $('authScreen'), app: $('appScreen') };
@@ -18,12 +18,6 @@ const showError = (m) => banner($('appError'), $('appErrorText'), m);
 
 if (!isConfigured) { show('setup'); throw new Error('Supabase is not configured'); }
 
-/* Ross 308 as-hatched performance objective, grams by day. Indicative figures
-   for the common targets — use your own breed's published table if it differs. */
-const STANDARD = {
-  0: 42, 7: 185, 14: 465, 21: 940, 28: 1560, 35: 2270, 42: 2980
-};
-
 const TO_GRAMS = { g: 1, kg: 1000, lb: 453.59237 };
 
 const state = { cycle: null, unit: 'g', weights: [], samples: [], currentDay: 1 };
@@ -31,20 +25,6 @@ const state = { cycle: null, unit: 'g', weights: [], samples: [], currentDay: 1 
 const fmt = (n, d = 0) =>
   Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 
-/* Linear interpolation between the published points. */
-function standardAt(day) {
-  const keys = Object.keys(STANDARD).map(Number).sort((a, b) => a - b);
-  if (day <= keys[0]) return STANDARD[keys[0]];
-  if (day >= keys[keys.length - 1]) return STANDARD[keys[keys.length - 1]];
-  for (let i = 0; i < keys.length - 1; i++) {
-    const a = keys[i], b = keys[i + 1];
-    if (day >= a && day <= b) {
-      const t = (day - a) / (b - a);
-      return STANDARD[a] + (STANDARD[b] - STANDARD[a]) * t;
-    }
-  }
-  return null;
-}
 
 /* ---------- Load --------------------------------------------------------- */
 async function boot() {

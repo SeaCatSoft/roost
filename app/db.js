@@ -56,6 +56,32 @@ export function phaseForDay(dayNumber) {
 }
 
 /* ---------------------------------------------------------------------------
+   Ross 308 as-hatched body weight, grams by day. Published breed objective —
+   what the birds should weigh, not what they do weigh.
+
+   Kept here because three screens compare against it, and three copies of a
+   growth curve is three chances for them to disagree about the same flock.
+   ------------------------------------------------------------------------ */
+export const BREED_STANDARD = {
+  0: 42, 7: 185, 14: 465, 21: 940, 28: 1560, 35: 2270, 42: 2980
+};
+
+/* Linear between the published points; flat outside them rather than
+   extrapolating a curve past where the breed data stops. */
+export function standardWeightAt(day) {
+  const keys = Object.keys(BREED_STANDARD).map(Number).sort((a, b) => a - b);
+  if (day <= keys[0]) return BREED_STANDARD[keys[0]];
+  if (day >= keys[keys.length - 1]) return BREED_STANDARD[keys[keys.length - 1]];
+  for (let i = 0; i < keys.length - 1; i++) {
+    const a = keys[i], b = keys[i + 1];
+    if (day >= a && day <= b) {
+      return BREED_STANDARD[a] + (BREED_STANDARD[b] - BREED_STANDARD[a]) * ((day - a) / (b - a));
+    }
+  }
+  return null;
+}
+
+/* ---------------------------------------------------------------------------
    Roles. A viewer can read everything and change nothing — the database
    enforces that, but a form that silently fails on save is a bad way to find
    out, so screens ask first and present themselves read-only.

@@ -191,10 +191,10 @@ body { background: var(--page); }
   overflow: hidden;
 }
 
-/* Four columns, shared by the header and every row so they stay aligned. */
+/* Five columns, shared by the header and every row so they stay aligned. */
 .day-list__head, .day-row {
   display: grid;
-  grid-template-columns: 1fr 68px 68px 68px;
+  grid-template-columns: 1fr 68px 68px 68px 92px;
   gap: .5rem;
   align-items: center;
   padding: .5rem .9rem;
@@ -235,6 +235,22 @@ body { background: var(--page); }
 .day-row__num::-webkit-outer-spin-button,
 .day-row__num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .day-row__num { -moz-appearance: textfield; appearance: textfield; }
+
+/* A phase only means anything once a day has a bag on it, so this dims
+   rather than disappears — the column stays put, so nothing jumps as a bag
+   count changes from zero. */
+.day-row__phase {
+  width: 100%; min-height: 40px; padding: .3rem .3rem;
+  font: inherit; font-size: .8125rem; text-align: center;
+  color: var(--ink); background: var(--page);
+  border: 1px solid var(--hairline); border-radius: 9px;
+  transition: opacity .18s var(--ease-out);
+}
+.day-row__phase:disabled { opacity: .35; }
+.day-row__phase:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
 
 
 /* ---------- Feed dashboard ---------- */

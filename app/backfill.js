@@ -25,8 +25,18 @@ const state = {
   lastDay: 1,
   saved: new Map(),   // day -> row already in the database
   draft: new Map(),   // day -> unsaved edits
-  bags: new Map()     // day number -> how many bag openings are already recorded
+  bags: new Map()     // day number -> [{ id, phase }] already recorded, oldest first
 };
+
+const PHASES = ['Starter', 'Grower', 'Finisher'];
+
+/* What phase a day's bags are on file as, or Roost's best guess if none are
+   recorded yet. A day is assumed uniform — every bag on it opened for the
+   same feed — which is how it is entered here and everywhere else in Roost. */
+function currentPhase(day) {
+  const rows = state.bags.get(day);
+  return (rows && rows.length) ? rows[0].phase : phaseForDay(day);
+}
 
 /* ---------- Load --------------------------------------------------------- */
 async function boot() {
@@ -58,8 +68,9 @@ async function boot() {
       .eq('cycle_id', state.cycle.id)
       .eq('session', 'DAY'),
     db.from('feed_bag_openings')
-      .select('opened_on')
+      .select('id, opened_on, phase')
       .eq('cycle_id', state.cycle.id)
+      .order('id')
   ]);
 
   if (checks.error) { showError(`Could not load existing checks: ${checks.error.message}`); return; }
@@ -67,10 +78,11 @@ async function boot() {
   (checks.data || []).forEach((r) => state.saved.set(r.day_number, r));
 
   // Bag openings are stored one row per bag, by date; map them back onto day
-  // numbers and count them, since a day can have opened several.
+  // numbers, since a day can have opened several.
   (bags.data || []).forEach((b) => {
     const day = daysBetween(state.cycle.placed_on, b.opened_on) + 1;
-    state.bags.set(day, (state.bags.get(day) || 0) + 1);
+    if (!state.bags.has(day)) state.bags.set(day, []);
+    state.bags.get(day).push({ id: b.id, phase: b.phase });
   });
 
   render();
@@ -108,15 +120,25 @@ function render() {
     const culls  = numberInput(day, 'culls', current ? current.culls : '');
 
     // A count, not a yes/no: a paper record can easily show three bags on one
-    // day. Days that already have bags start at that number — this screen adds
-    // bags, it has never removed them.
-    const already = state.bags.get(day) || 0;
-    const bags = numberInput(day, 'bag', draft ? draft.bag : (already || ''));
+    // day. Days that already have bags start at that number, and this number
+    // can now be corrected either way — raised to add more, or lowered to
+    // remove a mistaken entry.
+    const already = (state.bags.get(day) || []).length;
+    const bagVal = draft ? draft.bag : (already || '');
+    const bags = numberInput(day, 'bag', bagVal);
     if (already) {
-      bags.title = `${already} already recorded. Raise this to add more; lowering it removes nothing.`;
+      bags.title = `${already} already recorded. Change this number to correct it.`;
     }
 
-    row.append(label, deaths, culls, bags);
+    // Meaningless without a bag, so it dims rather than vanishes — the column
+    // stays put and nothing shifts as the count changes.
+    const phase = phaseSelect(day, draft ? draft.phase : currentPhase(day));
+    phase.disabled = !(Number(bagVal) > 0);
+    bags.addEventListener('input', () => {
+      phase.disabled = !(Number(bags.value) > 0);
+    });
+
+    row.append(label, deaths, culls, bags, phase);
     frag.appendChild(row);
   }
 
@@ -149,13 +171,33 @@ function numberInput(day, field, value) {
   return input;
 }
 
+function phaseSelect(day, value) {
+  const sel = document.createElement('select');
+  sel.className = 'day-row__phase';
+  sel.setAttribute('aria-label', `Feed type on day ${day}`);
+  PHASES.forEach((p) => {
+    const o = document.createElement('option');
+    o.value = p;
+    o.textContent = p;
+    if (p === value) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', () => {
+    const d = ensureDraft(day);
+    d.phase = sel.value;
+    sel.closest('.day-row').classList.add('is-dirty');
+  });
+  return sel;
+}
+
 function ensureDraft(day) {
   if (!state.draft.has(day)) {
     const saved = state.saved.get(day);
     state.draft.set(day, {
       mortality: saved ? saved.mortality : null,
       culls: saved ? saved.culls : null,
-      bag: state.bags.get(day) || 0
+      bag: (state.bags.get(day) || []).length,
+      phase: currentPhase(day)
     });
   }
   return state.draft.get(day);
@@ -201,8 +243,11 @@ function refreshTotals() {
 
 function countPending() {
   let n = 0;
-  state.draft.forEach((d) => {
-    if (d.mortality !== null || d.culls !== null || d.bag) n++;
+  state.draft.forEach((d, day) => {
+    const already = state.bags.get(day) || [];
+    const bagChanged = (d.bag || 0) !== already.length;
+    const phaseChanged = already.length > 0 && d.phase && d.phase !== currentPhase(day);
+    if (d.mortality !== null || d.culls !== null || bagChanged || phaseChanged) n++;
   });
   return n;
 }
@@ -235,7 +280,9 @@ $('saveBtn').addEventListener('click', async () => {
   const { data: { session } } = await db.auth.getSession();
 
   const checkRows = [];
-  const bagRows = [];
+  const bagInserts = [];
+  const bagDeletes = [];   // ids to remove entirely
+  const bagUpdates = [];   // { ids, phase } — feed type corrected on rows kept
 
   state.draft.forEach((d, day) => {
     if (d.mortality !== null || d.culls !== null) {
@@ -249,17 +296,41 @@ $('saveBtn').addEventListener('click', async () => {
         recorded_by: session?.user?.id ?? null
       });
     }
-    // Only the shortfall gets written, so re-saving a day already holding two
-    // bags adds nothing. A lower number is not a deletion — this screen has
-    // never removed bag records and does not start now.
-    const have = state.bags.get(day) || 0;
-    const want = d.bag || 0;
-    for (let i = 0; i < want - have; i++) {
-      bagRows.push({
-        cycle_id: state.cycle.id,
-        opened_on: dateForDay(state.cycle.placed_on, day),
-        phase: phaseForDay(day)
-      });
+
+    // A correction, not only an addition: raising the count adds bags,
+    // lowering it removes them, and the feed type can be fixed either way —
+    // this screen no longer treats what is already on file as untouchable.
+    const have = state.bags.get(day) || [];
+    const want = Math.max(0, d.bag || 0);
+    const phase = d.phase || currentPhase(day);
+
+    if (want > have.length) {
+      // Every existing bag is kept; correct its feed type if that changed,
+      // and add the shortfall in the chosen type.
+      if (have.length && have.some((r) => r.phase !== phase)) {
+        bagUpdates.push({ ids: have.map((r) => r.id), phase });
+      }
+      for (let i = 0; i < want - have.length; i++) {
+        bagInserts.push({
+          cycle_id: state.cycle.id,
+          opened_on: dateForDay(state.cycle.placed_on, day),
+          phase
+        });
+      }
+    } else if (want < have.length) {
+      // Which specific rows survive does not matter — a bag carries no
+      // information beyond its date and feed type, and both are already
+      // being set here — so the oldest `want` rows are kept and the rest
+      // removed, correcting the feed type on the survivors if needed.
+      const keep = have.slice(0, want);
+      const drop = have.slice(want);
+      if (keep.length && keep.some((r) => r.phase !== phase)) {
+        bagUpdates.push({ ids: keep.map((r) => r.id), phase });
+      }
+      drop.forEach((r) => bagDeletes.push(r.id));
+    } else if (have.length && have.some((r) => r.phase !== phase)) {
+      // Count unchanged; only the feed type was corrected.
+      bagUpdates.push({ ids: have.map((r) => r.id), phase });
     }
   });
 
@@ -280,10 +351,21 @@ $('saveBtn').addEventListener('click', async () => {
     }
   }
 
-  if (bagRows.length) {
-    const { error } = await db.from('feed_bag_openings').insert(bagRows);
-    if (error) showError(`Days saved, but some bags were not: ${error.message}`);
+  const bagErrors = [];
+
+  if (bagInserts.length) {
+    const { error } = await db.from('feed_bag_openings').insert(bagInserts);
+    if (error) bagErrors.push(`some bags were not added (${error.message})`);
   }
+  if (bagDeletes.length) {
+    const { error } = await db.from('feed_bag_openings').delete().in('id', bagDeletes);
+    if (error) bagErrors.push(`some bags were not removed (${error.message})`);
+  }
+  for (const u of bagUpdates) {
+    const { error } = await db.from('feed_bag_openings').update({ phase: u.phase }).in('id', u.ids);
+    if (error) { bagErrors.push(`some feed types were not corrected (${error.message})`); break; }
+  }
+  if (bagErrors.length) showError(`Days saved, but ${bagErrors.join('; ')}.`);
 
   // Re-read rather than assume the write landed as sent.
   state.draft.clear();

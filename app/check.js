@@ -141,7 +141,14 @@ $('bagSwitch').addEventListener('click', () => {
   // The count only means anything while the switch is on. Reset it each time
   // so yesterday's four bags never ride along into a day that opened one.
   $('bagCountField').hidden = !state.bagOpened;
-  if (state.bagOpened) $('bags').value = '1';
+  if (state.bagOpened) {
+    $('bags').value = '1';
+    // Roost's best guess for today, pre-selected rather than left blank — it
+    // is right most days, and the field stays a normal select the rest of
+    // the time the flock is actually mid-changeover.
+    $('bagPhase').value = phaseForDay(state.dayNumber);
+    $('bagPhaseHint').textContent = `Guessed from day ${state.dayNumber}. Change it if this bag was something else.`;
+  }
 });
 
 /* ---------- Load ---------------------------------------------------------- */
@@ -275,6 +282,9 @@ $('checkForm').addEventListener('submit', async (e) => {
 
   if (state.bagOpened) {
     const bags = Math.max(1, parseInt($('bags').value, 10) || 1);
+    // Roost's guess pre-fills this field; whatever it reads now — guessed or
+    // corrected — is what actually went into the feeders today.
+    const phase = $('bagPhase').value || phaseForDay(state.dayNumber);
 
     // One row per bag, never one row carrying a quantity: every figure in the
     // app counts these rows (v_cycle_summary, the feed dashboard), so a
@@ -283,7 +293,7 @@ $('checkForm').addEventListener('submit', async (e) => {
       Array.from({ length: bags }, () => ({
         cycle_id: state.cycle.id,
         opened_on: today(),
-        phase: phaseForDay(state.dayNumber)
+        phase
       }))
     );
 

@@ -719,6 +719,16 @@ body { background: var(--page); }
 .owed__total { font-size: clamp(2.1rem, 8vw, 2.75rem); font-weight: 700; letter-spacing: -.03em; line-height: 1; }
 .owed__sub { margin-top: .3rem; }
 
+.predict { text-align: center; padding: 1.1rem 0; }
+.predict__weight { font-size: clamp(2.1rem, 8vw, 2.75rem); font-weight: 700; letter-spacing: -.03em; line-height: 1; }
+.predict__sub { margin-top: .4rem; }
+
+/* Quick-pick horizons reuse the chip look but sit in a row that wraps. */
+#quickPicks { flex-wrap: wrap; }
+#quickPicks .chip-btn.is-selected {
+  background: var(--accent); color: var(--accent-ink); font-weight: 600;
+}
+
 .ageing { margin-top: 1.1rem; display: grid; gap: .45rem; }
 .age-row { display: grid; grid-template-columns: 84px 1fr 82px; gap: .6rem; align-items: center; }
 .age-row__label { font-size: .78rem; color: var(--ink-3); }

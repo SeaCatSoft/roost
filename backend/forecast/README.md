@@ -2,39 +2,54 @@
 
 Runs `forecast.py` once a day via `.github/workflows/forecast.yml`. It uses
 Google's [TimesFM](https://github.com/google-research/timesfm) to project,
-for every open cycle, where feed-bag usage and mortality are headed by the
-end of the grow-out, and writes the result to `cycle_forecasts`
+for each *opted-in* open cycle, where feed-bag usage and mortality are headed
+by the end of the grow-out, and writes the result to `cycle_forecasts`
 (`018_forecast.sql`). Nothing in the frontend computes a forecast — the app
 only reads what this job wrote.
 
-**This has not been run against a live TimesFM install or a live Supabase
-project.** It was written from the published TimesFM API and Roost's real
-schema, not verified end to end. Before trusting it:
+**Status as of 2026-08-23: manually verified end to end against the live
+project**, after fixing three real bugs found in that process:
+
+1. The model-loading code was written against TimesFM 1.x's API
+   (`TimesFm(hparams=..., checkpoint=...)`). PyPI jumps straight from `1.0.0`
+   to `2.0.0`+, and 2.x replaced that API entirely. The installed version is
+   `timesfm.TimesFM_2p5_200M_torch.from_pretrained(...)` →
+   `.compile(timesfm.ForecastConfig(...))` → `.forecast(horizon=..., inputs=[...])`,
+   confirmed against [the model card](https://huggingface.co/google/timesfm-2.5-200m-pytorch)
+   and [the repo's own skill doc](https://github.com/google-research/timesfm/blob/master/timesfm-forecasting/SKILL.md).
+2. A cycle with zero real activity (no bag-opening events, no daily checks —
+   i.e. nobody has logged anything yet) was silently writing a confident
+   "-100% under plan" row instead of being recognized as having no data to
+   forecast from. Both `process_feed` and `process_mortality` now skip and
+   say why, rather than writing zero-as-if-it-were-a-result.
+3. `main()`'s log line said "forecast written" unconditionally, even when
+   both metrics had silently skipped — which is what let bug #2 go unnoticed
+   for a full run. Every cycle now logs one line per metric, `written: ...`
+   or `skipped: ...` with the actual reason.
+
+## Farm scoping — read this before touching `FORECAST_FARM_IDS`
+
+Roost is public; people other than you sign up and run real farms on it. This
+job runs with the service-role key, which sees every farm on the platform,
+not just yours. **It refuses to run at all unless `FORECAST_FARM_IDS` is set**
+— no farms opted in is the safe default, not "run for everyone." Set it to a
+comma-separated list of `farms.id` values (see the `farms` table) for the
+farms you want forecasted. Growing that list to include a farm you don't own
+means running an experimental, still-maturing feature against a stranger's
+real operational data without asking them — do that deliberately, not by
+default.
 
 ## First-run checklist
 
-1. **Run `018_forecast.sql`** in the Supabase SQL editor, after `017`.
-2. **`pip install -r requirements.txt` locally** and run `python forecast.py`
-   once by hand with `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` set, against
-   a cycle with at least 5 days of daily checks and a feed plan entered.
-   Watch for:
-   - The `timesfm.TimesFm` / `TimesFmHparams` / `TimesFmCheckpoint`
-     constructor signature — this moves between library versions faster than
-     most; check the version actually installed against
-     [the repo's README](https://github.com/google-research/timesfm) if the
-     import or the forecast call fails.
-   - `horizon_len=64` in `load_model()` covers cycles up to ~84 days
-     old-when-forecast-starts against a target in the low 100s; if a farm
-     sets `target_sale_age` near its 120-day ceiling, this needs raising —
-     `forecast_forward()` will throw rather than silently truncate, so it
-     will be obvious if it happens.
-   - The smallest checkpoint (`google/timesfm-1.0-200m-pytorch`) still needs
-     a real download (~800MB) and noticeable CPU time per cycle. On GitHub's
-     free runners this may take several minutes for a handful of cycles —
-     fine for a once-a-day job, but worth watching the Actions run time for.
-3. Once a manual run writes sane-looking rows to `cycle_forecasts`, pin
-   `requirements.txt` to the exact versions that worked, and enable the
-   scheduled workflow.
+- [x] Ran `018_forecast.sql` in the Supabase SQL editor.
+- [x] Ran `forecast.py` by hand against real cycles, found and fixed the three
+      bugs above, confirmed the fixed output was correct.
+- [ ] **Pin `requirements.txt` to the exact versions that worked** — run
+      `pip show timesfm supabase` and replace the ranges below with exact
+      pins, now that we know they resolve correctly.
+- [ ] Confirm the dashboard card renders correctly against this real data
+      (checked so far only against fabricated data — see the PR).
+- [ ] Enable the scheduled workflow once the above are done.
 
 ## Secrets
 
@@ -44,6 +59,7 @@ Set these as repository secrets (Settings → Secrets and variables → Actions)
 | --- | --- |
 | `SUPABASE_URL` | Same value as `app/config.js` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase dashboard → Project Settings → API. **Never** put this in `app/config.js` or anywhere in `app/` — it bypasses every RLS policy in `003_security.sql`. |
+| `FORECAST_FARM_IDS` | Comma-separated `farms.id` list, e.g. `1,2`. See "Farm scoping" above — required, job exits immediately without it. |
 
 ## Why two metrics, and why they're shaped differently
 

@@ -22,8 +22,14 @@ writes anywhere else — a forecasting job overreaching into operational data is
 exactly the kind of thing that shouldn't be possible to do by accident, so it
 isn't given the columns to do it.
 
-Untested against a live TimesFM install as of writing — see README.md in this
-directory for what to check on the first real run.
+Verified against a live TimesFM 2.5 install on 2026-08-23 (the package jumped
+straight from 1.0.0 to 2.0.0+ on PyPI, and 2.x's Python API — from_pretrained()
+/ compile() / forecast(horizon=..., inputs=...) — replaced 1.x's TimesFm(
+hparams=..., checkpoint=...) constructor entirely; the two are not
+interchangeable). Source: google/timesfm-2.5-200m-pytorch's model card and
+google-research/timesfm's own SKILL.md, both consistent on the exact call
+shape used below. The end-to-end Supabase read/write path is still unverified
+as of this pass — see README.md.
 """
 
 import os
@@ -38,7 +44,7 @@ from supabase import create_client
 # writing a row that looks authoritative and isn't.
 MIN_DAYS_OF_DATA = 5
 
-TFM_CHECKPOINT = "google/timesfm-1.0-200m-pytorch"
+TFM_CHECKPOINT = "google/timesfm-2.5-200m-pytorch"
 
 
 def get_client():
@@ -48,30 +54,34 @@ def get_client():
 
 
 def load_model():
-    """Loaded once per run, not once per cycle — the checkpoint load is the
-    slow part. Import is deferred so `python forecast.py --help` or a syntax
-    check doesn't require torch installed."""
+    """Loaded once per run, not once per cycle — the checkpoint load and
+    compile are the slow part. Import is deferred so `python -m py_compile`
+    or a syntax check doesn't require torch installed.
+
+    max_horizon=256 covers every remaining-days value this job will ever ask
+    for (cycles.target_sale_age tops out at 120), so — unlike 1.x, where the
+    model's horizon was fixed at construction and had to be sized in advance —
+    there's no equivalent truncation risk here: horizon is passed explicitly
+    per forecast() call in forecast_forward() below.
+
+    infer_is_positive=True fits both our series (bag counts, cumulative
+    losses are never negative) but is a hint, not a guarantee — the manual
+    clamp in forecast_forward() still does the real enforcing."""
+    import torch
     import timesfm
 
-    return timesfm.TimesFm(
-        hparams=timesfm.TimesFmHparams(
-            backend="cpu",
-            per_core_batch_size=32,
-            horizon_len=64,       # >= longest possible remaining days (120 - min age 21... see note)
-            input_patch_len=32,
-            output_patch_len=64,
-            num_layers=20,
-            model_dims=1280,
-        ),
-        checkpoint=timesfm.TimesFmCheckpoint(huggingface_repo_id=TFM_CHECKPOINT),
-    )
-    # NOTE: target_sale_age can be set up to 120 (cycles.target_sale_age check
-    # constraint), so horizon_len=64 is not actually a safe upper bound for
-    # every farm's setting — it only covers the common 21-70 day range. If a
-    # cycle's remaining days exceeds horizon_len, forecast_forward() below
-    # raises rather than silently truncating; raise horizon_len (and re-check
-    # output_patch_len's relationship to it in the TimesFM docs for the
-    # installed version) if that happens.
+    torch.set_float32_matmul_precision("high")
+    model = timesfm.TimesFM_2p5_200M_torch.from_pretrained(TFM_CHECKPOINT)
+    model.compile(timesfm.ForecastConfig(
+        max_context=1024,
+        max_horizon=256,
+        normalize_inputs=True,
+        use_continuous_quantile_head=True,
+        force_flip_invariance=True,
+        infer_is_positive=True,
+        fix_quantile_crossing=True,
+    ))
+    return model
 
 
 def forecast_forward(model, context, remaining_days):
@@ -83,7 +93,8 @@ def forecast_forward(model, context, remaining_days):
     if remaining_days <= 0:
         return np.array([])
 
-    point_forecast, _ = model.forecast([np.asarray(context, dtype=float)], freq=[0])
+    point_forecast, _ = model.forecast(
+        horizon=remaining_days, inputs=[np.asarray(context, dtype=float)])
     forecast = np.asarray(point_forecast[0][:remaining_days], dtype=float)
 
     floor = context[-1]
@@ -167,7 +178,7 @@ def process_feed(db, model, cycle):
     target = cycle["target_sale_age"]
     as_of_day = min(day_of_cycle(placed_on, date.today()), target)
     if as_of_day < MIN_DAYS_OF_DATA:
-        return
+        return f"skipped: only {as_of_day} day(s) old, need {MIN_DAYS_OF_DATA}"
 
     assumptions = db.table("cycle_assumptions").select("bag_size_kg") \
         .eq("cycle_id", cycle_id).maybe_single().execute().data
@@ -175,6 +186,14 @@ def process_feed(db, model, cycle):
 
     openings = db.table("feed_bag_openings").select("opened_on") \
         .eq("cycle_id", cycle_id).execute().data
+    if not openings:
+        # A cycle this many days in cannot physically have opened zero bags —
+        # the birds are being fed regardless of whether the checkbox is
+        # ticked. Zero here means "nobody has logged a bag yet," not "feed
+        # use is zero," and writing a confident-looking forecast off that
+        # would be worse than writing none: -100% deviation reads as a
+        # result, not as a missing-data flag.
+        return "skipped: no bag-opening events recorded for this cycle"
     events_by_day = {}
     for row in openings:
         d = day_of_cycle(placed_on, date.fromisoformat(row["opened_on"]))
@@ -185,7 +204,7 @@ def process_feed(db, model, cycle):
     plan_rows = db.table("v_cycle_feed_plan").select("week, weekly_kg") \
         .eq("cycle_id", cycle_id).execute().data
     if not plan_rows:
-        return  # no feed plan entered yet — nothing to compare against
+        return "skipped: no feed_intake_curve entered for this cycle"
     planned_full = planned_feed_curve(plan_rows, bag_size_kg, target)
 
     totals = db.table("v_cycle_feed_totals").select("total_bags") \
@@ -198,6 +217,7 @@ def process_feed(db, model, cycle):
 
     series = make_series_payload(as_of_day, target, actual, planned_full, forecast)
     upsert(db, cycle_id, "feed_bags", as_of_day, projected_total, planned_total, series)
+    return f"written: day {as_of_day}, projected {projected_total:.1f} vs planned {planned_total:.1f}"
 
 
 def process_mortality(db, model, cycle):
@@ -207,7 +227,7 @@ def process_mortality(db, model, cycle):
     birds_placed = cycle["birds_placed"]
     as_of_day = min(day_of_cycle(placed_on, date.today()), target)
     if as_of_day < MIN_DAYS_OF_DATA:
-        return
+        return f"skipped: only {as_of_day} day(s) old, need {MIN_DAYS_OF_DATA}"
 
     assumptions = db.table("cycle_assumptions").select("mortality_rate") \
         .eq("cycle_id", cycle_id).maybe_single().execute().data
@@ -216,6 +236,15 @@ def process_mortality(db, model, cycle):
 
     checks = db.table("daily_checks").select("day_number, mortality, culls") \
         .eq("cycle_id", cycle_id).lte("day_number", as_of_day).execute().data
+    if not checks:
+        # Unlike the feed side, actual mortality legitimately can be zero —
+        # a clean cycle with no losses is a real, good outcome. What can't be
+        # trusted is zero because no daily check was ever logged: that's the
+        # same "nobody recorded anything" gap as the feed guard above, just
+        # silent here because 0 losses looks identical to 0 rows. Checking
+        # for at least one row (not what it contains) is what tells the two
+        # apart.
+        return "skipped: no daily checks recorded for this cycle"
     events_by_day = {r["day_number"]: r["mortality"] + r["culls"] for r in checks}
     actual = build_daily_series(events_by_day, as_of_day)
 
@@ -234,28 +263,51 @@ def process_mortality(db, model, cycle):
 
     series = make_series_payload(as_of_day, target, actual, planned_full, forecast)
     upsert(db, cycle_id, "mortality", as_of_day, projected_total, planned_total, series)
+    return f"written: day {as_of_day}, projected {projected_total:.1f} vs planned {planned_total:.1f}"
 
 
 def main():
     db = get_client()
-    cycles = db.table("cycles").select("id, placed_on, target_sale_age, birds_placed") \
-        .is_("closed_at", "null").execute().data
+
+    # This runs with the service-role key, which sees every farm on the
+    # platform, not just yours — Roost is public and other real people sign
+    # up and use it. Until this feature has proven itself, it must not run
+    # against a farm that hasn't been explicitly opted in here. No env var
+    # set means no farms run, not "run for everyone" — the safe failure mode
+    # is doing nothing, not defaulting to platform-wide.
+    farm_ids_env = os.environ.get("FORECAST_FARM_IDS", "").strip()
+    if not farm_ids_env:
+        print(
+            "FORECAST_FARM_IDS is not set — refusing to run for every farm on "
+            "the platform. Set it to a comma-separated list of farm ids (e.g. "
+            "'1,2') to scope this job to specific farms. See README.md.",
+            file=sys.stderr,
+        )
+        return
+    farm_ids = [int(x) for x in farm_ids_env.split(",") if x.strip()]
+
+    cycles = db.table("cycles").select("id, farm_id, placed_on, target_sale_age, birds_placed") \
+        .is_("closed_at", "null").in_("farm_id", farm_ids).execute().data
 
     if not cycles:
-        print("No open cycles — nothing to forecast.")
+        print(f"No open cycles for farm_id in {farm_ids} — nothing to forecast.")
         return
 
     model = load_model()
 
     for cycle in cycles:
         try:
-            process_feed(db, model, cycle)
-            process_mortality(db, model, cycle)
-            print(f"cycle {cycle['id']}: forecast written")
+            feed_result = process_feed(db, model, cycle)
+            mort_result = process_mortality(db, model, cycle)
+            # Both return a description of what actually happened — "written:
+            # ..." or "skipped: ..." — never a bare success/failure, so this
+            # line can't say "forecast written" when nothing was.
+            print(f"cycle {cycle['id']}: feed_bags — {feed_result}")
+            print(f"cycle {cycle['id']}: mortality — {mort_result}")
         except Exception as e:
             # One cycle's bad data (e.g. no plan entered yet) shouldn't stop
             # the rest of the farm's forecasts from being written.
-            print(f"cycle {cycle['id']}: skipped — {e}", file=sys.stderr)
+            print(f"cycle {cycle['id']}: error — {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":

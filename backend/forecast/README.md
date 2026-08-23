@@ -27,29 +27,37 @@ project**, after fixing three real bugs found in that process:
    for a full run. Every cycle now logs one line per metric, `written: ...`
    or `skipped: ...` with the actual reason.
 
-## Farm scoping — read this before touching `FORECAST_FARM_IDS`
+## Farm scoping — an opt-in, not a secret
 
 Roost is public; people other than you sign up and run real farms on it. This
 job runs with the service-role key, which sees every farm on the platform,
-not just yours. **It refuses to run at all unless `FORECAST_FARM_IDS` is set**
-— no farms opted in is the safe default, not "run for everyone." Set it to a
-comma-separated list of `farms.id` values (see the `farms` table) for the
-farms you want forecasted. Growing that list to include a farm you don't own
-means running an experimental, still-maturing feature against a stranger's
-real operational data without asking them — do that deliberately, not by
-default.
+not just yours. It only processes a farm whose own owner has flipped
+**Cycle forecasts (beta)** on, on their My Farm screen (`farm.html`) —
+`farms.forecast_opt_in`, added in `019_forecast_opt_in.sql`, default `false`.
+No opted-in farms means no farms run.
+
+This used to be a `FORECAST_FARM_IDS` repo secret, requiring *you* to add a
+farm to a list by hand. That put the decision in the wrong hands: whether a
+farm's real operational data runs through an experimental analytics feature
+is the farm owner's call, not something scoped from outside their account.
+The secret is no longer read by `forecast.py` and can be deleted from the
+repo once you've confirmed the opt-in flow works.
 
 ## First-run checklist
 
-- [x] Ran `018_forecast.sql` in the Supabase SQL editor.
-- [x] Ran `forecast.py` by hand against real cycles, found and fixed the three
-      bugs above, confirmed the fixed output was correct.
-- [ ] **Pin `requirements.txt` to the exact versions that worked** — run
-      `pip show timesfm supabase` and replace the ranges below with exact
-      pins, now that we know they resolve correctly.
-- [ ] Confirm the dashboard card renders correctly against this real data
-      (checked so far only against fabricated data — see the PR).
-- [ ] Enable the scheduled workflow once the above are done.
+- [x] Ran `018_forecast.sql` and `019_forecast_opt_in.sql` in the Supabase
+      SQL editor.
+- [x] Ran `forecast.py` by hand against real cycles (scoped via the old
+      `FORECAST_FARM_IDS` secret at the time), found and fixed the three bugs
+      above, confirmed the fixed output was correct.
+- [x] Confirmed the dashboard card renders correctly against real data —
+      numbers matched a direct SQL query exactly.
+- [x] Pinned `requirements.txt` to the exact versions verified
+      (`timesfm==2.0.2`, `supabase==2.31.0`).
+- [ ] Run `forecast.py` once more now that farm selection reads
+      `forecast_opt_in` instead of the env var — confirm a farm with the
+      toggle on gets forecasted and one with it off does not.
+- [ ] Enable the scheduled workflow once the above is done.
 
 ## Secrets
 
@@ -59,7 +67,6 @@ Set these as repository secrets (Settings → Secrets and variables → Actions)
 | --- | --- |
 | `SUPABASE_URL` | Same value as `app/config.js` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase dashboard → Project Settings → API. **Never** put this in `app/config.js` or anywhere in `app/` — it bypasses every RLS policy in `003_security.sql`. |
-| `FORECAST_FARM_IDS` | Comma-separated `farms.id` list, e.g. `1,2`. See "Farm scoping" above — required, job exits immediately without it. |
 
 ## Why two metrics, and why they're shaped differently
 

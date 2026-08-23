@@ -22,6 +22,14 @@ writes anywhere else — a forecasting job overreaching into operational data is
 exactly the kind of thing that shouldn't be possible to do by accident, so it
 isn't given the columns to do it.
 
+Roost is public — other real farms use it, and this job runs with a
+service-role key that sees every one of them. It only processes farms with
+farms.forecast_opt_in = true (019_forecast_opt_in.sql), a switch only that
+farm's own owner can flip (farm.html). An earlier version of this file used a
+FORECAST_FARM_IDS env var/secret for the same purpose, requiring a repo
+secret edit to add a farm — that put the decision in this repo's hands
+instead of the farm owner's, which was the wrong owner for the decision.
+
 Verified against a live TimesFM 2.5 install on 2026-08-23 (the package jumped
 straight from 1.0.0 to 2.0.0+ on PyPI, and 2.x's Python API — from_pretrained()
 / compile() / forecast(horizon=..., inputs=...) — replaced 1.x's TimesFm(
@@ -270,27 +278,21 @@ def main():
     db = get_client()
 
     # This runs with the service-role key, which sees every farm on the
-    # platform, not just yours — Roost is public and other real people sign
-    # up and use it. Until this feature has proven itself, it must not run
-    # against a farm that hasn't been explicitly opted in here. No env var
-    # set means no farms run, not "run for everyone" — the safe failure mode
-    # is doing nothing, not defaulting to platform-wide.
-    farm_ids_env = os.environ.get("FORECAST_FARM_IDS", "").strip()
-    if not farm_ids_env:
-        print(
-            "FORECAST_FARM_IDS is not set — refusing to run for every farm on "
-            "the platform. Set it to a comma-separated list of farm ids (e.g. "
-            "'1,2') to scope this job to specific farms. See README.md.",
-            file=sys.stderr,
-        )
+    # platform, not just any one owner's — Roost is public and other real
+    # people sign up and use it. Only a farm whose own owner has opted in
+    # (farms.forecast_opt_in, flipped from farm.html) gets processed; no
+    # opted-in farms means no farms run, not "run for everyone."
+    farm_ids = [f["id"] for f in db.table("farms").select("id")
+                .eq("forecast_opt_in", True).execute().data]
+    if not farm_ids:
+        print("No farms have forecast_opt_in set — nothing to do.")
         return
-    farm_ids = [int(x) for x in farm_ids_env.split(",") if x.strip()]
 
     cycles = db.table("cycles").select("id, farm_id, placed_on, target_sale_age, birds_placed") \
         .is_("closed_at", "null").in_("farm_id", farm_ids).execute().data
 
     if not cycles:
-        print(f"No open cycles for farm_id in {farm_ids} — nothing to forecast.")
+        print(f"No open cycles for opted-in farm_id in {farm_ids} — nothing to forecast.")
         return
 
     model = load_model()

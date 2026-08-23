@@ -27,8 +27,4 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          # Roost is public — other real farms use it. This job runs with a
-          # key that sees all of them, so it only touches farm ids listed
-          # here. See backend/forecast/README.md before adding to this list.
-          FORECAST_FARM_IDS: ${{ secrets.FORECAST_FARM_IDS }}
         run: python forecast.py

@@ -525,6 +525,32 @@ function forecastDelta(pct, overWord, underWord) {
   return `${num(abs, 0)}% ${pct > 0 ? overWord : underWord}`;
 }
 
+/* Pure arithmetic against the plan total, not a new prediction: what pace
+   would still hit the original plan by the end of the cycle. This stops
+   short of recommending a feeding change for the birds themselves — that's
+   a husbandry call, not a software one — it only answers the bag-buying
+   question directly in front of it. */
+function feedPaceNote(feed) {
+  const target = feed.series.length;
+  const remainingDays = target - feed.as_of_day;
+  if (remainingDays <= 0) return '';
+
+  const actualNow = Number(feed.series[feed.as_of_day - 1]?.actual ?? 0);
+  const currentPace = feed.as_of_day > 0 ? actualNow / feed.as_of_day : 0;
+  const remainingNeeded = Number(feed.planned_total) - actualNow;
+
+  if (remainingNeeded <= 0) {
+    return `Already at or ahead of the ${num(feed.planned_total, 0)}-bag plan total — ` +
+      `no need to increase pace to stay on it.`;
+  }
+
+  const neededPace = remainingNeeded / remainingDays;
+  return `To still land on the original ${num(feed.planned_total, 0)}-bag plan by day ${target}, ` +
+    `that's ${num(neededPace, 1)} bags/day for the remaining ${num(remainingDays)} days ` +
+    `— currently averaging ${num(currentPace, 1)}/day. Worth confirming this is a real gap ` +
+    `and not a bag that went unrecorded before changing anything.`;
+}
+
 function renderForecast(feed, mortality) {
   const panel = $('forecastPanel');
   if (!feed && !mortality) { panel.hidden = true; return; }
@@ -544,6 +570,7 @@ function renderForecast(feed, mortality) {
       [$('feedForecastPlan'), $('feedForecastActual'), $('feedForecastProjected'), $('feedForecastLabels')],
       feed.series
     );
+    $('feedForecastPace').textContent = feedPaceNote(feed);
   }
 
   if (mortality) {

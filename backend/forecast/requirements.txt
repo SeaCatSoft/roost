@@ -1,0 +1,6 @@
+# Pin these to exact versions after the first successful run — see README.md.
+# Left loose here because the exact current release wasn't verified against a
+# live install while writing this.
+supabase>=2.0,<3.0
+timesfm[torch]>=1.2,<2.0
+numpy>=1.26

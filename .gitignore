@@ -10,6 +10,11 @@ desktop.ini
 # Dependencies (none today, but harmless to guard against)
 node_modules/
 
+# Python (backend/forecast/)
+__pycache__/
+*.pyc
+.venv/
+
 # Secrets — never commit these
 .env
 .env.*

@@ -1,0 +1,262 @@
+"""
+Roost — daily forecast job
+
+Runs once a day (see .github/workflows/forecast.yml). For every open cycle it
+forecasts, with Google's TimesFM, where two things are headed by the end of
+the grow-out:
+
+  feed_bags  — cumulative bags opened, against the planned bag curve in
+               v_cycle_feed_plan / v_cycle_feed_totals. This is the FCR/cost
+               side — see backend/README.md's note on the $1,110 loss.
+  mortality  — cumulative losses (daily_checks.mortality + culls), against
+               the single mortality_rate assumption. This is the revenue side.
+
+Both series are the REAL recorded actuals, not the (currently unused)
+feed_offered_kg column — see the note in the repo root conversation this
+script came out of: the daily check form never writes feed_offered_kg, so
+bag-opening events are the only real feed signal that exists.
+
+This script only ever reads from the normal tables/views with the anon-scoped
+service role, and writes to cycle_forecasts (018_forecast.sql). It never
+writes anywhere else — a forecasting job overreaching into operational data is
+exactly the kind of thing that shouldn't be possible to do by accident, so it
+isn't given the columns to do it.
+
+Untested against a live TimesFM install as of writing — see README.md in this
+directory for what to check on the first real run.
+"""
+
+import os
+import sys
+from datetime import date
+
+import numpy as np
+from supabase import create_client
+
+# Cycles younger than this have too little context for a forecast to mean
+# anything; TimesFM would just be extrapolating noise. Skip them rather than
+# writing a row that looks authoritative and isn't.
+MIN_DAYS_OF_DATA = 5
+
+TFM_CHECKPOINT = "google/timesfm-1.0-200m-pytorch"
+
+
+def get_client():
+    url = os.environ["SUPABASE_URL"]
+    key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]  # bypasses RLS — server-side only
+    return create_client(url, key)
+
+
+def load_model():
+    """Loaded once per run, not once per cycle — the checkpoint load is the
+    slow part. Import is deferred so `python forecast.py --help` or a syntax
+    check doesn't require torch installed."""
+    import timesfm
+
+    return timesfm.TimesFm(
+        hparams=timesfm.TimesFmHparams(
+            backend="cpu",
+            per_core_batch_size=32,
+            horizon_len=64,       # >= longest possible remaining days (120 - min age 21... see note)
+            input_patch_len=32,
+            output_patch_len=64,
+            num_layers=20,
+            model_dims=1280,
+        ),
+        checkpoint=timesfm.TimesFmCheckpoint(huggingface_repo_id=TFM_CHECKPOINT),
+    )
+    # NOTE: target_sale_age can be set up to 120 (cycles.target_sale_age check
+    # constraint), so horizon_len=64 is not actually a safe upper bound for
+    # every farm's setting — it only covers the common 21-70 day range. If a
+    # cycle's remaining days exceeds horizon_len, forecast_forward() below
+    # raises rather than silently truncating; raise horizon_len (and re-check
+    # output_patch_len's relationship to it in the TimesFM docs for the
+    # installed version) if that happens.
+
+
+def forecast_forward(model, context, remaining_days):
+    """context: 1-D array of daily cumulative values, oldest first, one per
+    day so far (forward-filled — no gaps). Returns `remaining_days` forecast
+    values continuing the series. Clamped to be non-decreasing and floored at
+    the last actual value, because TimesFM has no idea this series is a
+    cumulative count and won't enforce that on its own."""
+    if remaining_days <= 0:
+        return np.array([])
+
+    point_forecast, _ = model.forecast([np.asarray(context, dtype=float)], freq=[0])
+    forecast = np.asarray(point_forecast[0][:remaining_days], dtype=float)
+
+    floor = context[-1]
+    out = np.maximum.accumulate(np.maximum(forecast, floor))
+    return out
+
+
+def day_of_cycle(placed_on: date, on: date) -> int:
+    return (on - placed_on).days + 1
+
+
+def build_daily_series(events_by_day: dict, as_of_day: int, start_value=0):
+    """events_by_day: {day_number: value added that day}. Returns a forward-
+    filled cumulative array for day 1..as_of_day (index 0 = day 1)."""
+    out = np.zeros(as_of_day, dtype=float)
+    running = start_value
+    for d in range(1, as_of_day + 1):
+        running += events_by_day.get(d, 0)
+        out[d - 1] = running
+    return out
+
+
+def planned_feed_curve(plan_rows, bag_size_kg, target_sale_age):
+    """Day-by-day planned cumulative bags, spread across each week exactly as
+    dashboard.js's renderFeed() does it — same weekly_kg divided evenly across
+    its 7 days — so the chart's plan line matches what the dashboard already
+    shows for the current day."""
+    out = np.zeros(target_sale_age, dtype=float)
+    cumulative_kg = 0.0
+    for week_row in sorted(plan_rows, key=lambda r: r["week"]):
+        week_kg = float(week_row["weekly_kg"])
+        for offset in range(7):
+            day = (week_row["week"] - 1) * 7 + offset + 1
+            if day > target_sale_age:
+                break
+            cumulative_kg += week_kg / 7
+            out[day - 1] = cumulative_kg / bag_size_kg
+    # Fill any tail past the last defined week with its last value rather
+    # than zero, so target_sale_age beyond the curve's coverage doesn't read
+    # as "plan is zero bags."
+    last = 0.0
+    for i in range(target_sale_age):
+        last = out[i] if out[i] > 0 else last
+        out[i] = last
+    return out
+
+
+def make_series_payload(as_of_day, target_sale_age, actual, planned_full, forecast):
+    """actual/forecast are aligned to day 1..as_of_day and as_of_day+1..target
+    respectively; planned_full covers day 1..target already."""
+    points = []
+    for day in range(1, target_sale_age + 1):
+        points.append({
+            "day": day,
+            "actual": round(float(actual[day - 1]), 2) if day <= as_of_day else None,
+            "planned": round(float(planned_full[day - 1]), 2),
+            "forecast": round(float(forecast[day - as_of_day - 1]), 2) if day > as_of_day else None,
+        })
+    return points
+
+
+def upsert(db, cycle_id, metric, as_of_day, projected_total, planned_total, series):
+    deviation_pct = (
+        (projected_total - planned_total) / planned_total * 100
+        if planned_total else 0.0
+    )
+    db.table("cycle_forecasts").upsert({
+        "cycle_id": cycle_id,
+        "metric": metric,
+        "as_of_day": as_of_day,
+        "projected_total": round(float(projected_total), 4),
+        "planned_total": round(float(planned_total), 4),
+        "deviation_pct": round(float(deviation_pct), 2),
+        "series": series,
+    }, on_conflict="cycle_id,metric,as_of_day").execute()
+
+
+def process_feed(db, model, cycle):
+    cycle_id = cycle["id"]
+    placed_on = date.fromisoformat(cycle["placed_on"])
+    target = cycle["target_sale_age"]
+    as_of_day = min(day_of_cycle(placed_on, date.today()), target)
+    if as_of_day < MIN_DAYS_OF_DATA:
+        return
+
+    assumptions = db.table("cycle_assumptions").select("bag_size_kg") \
+        .eq("cycle_id", cycle_id).maybe_single().execute().data
+    bag_size_kg = float(assumptions["bag_size_kg"]) if assumptions else 30.0
+
+    openings = db.table("feed_bag_openings").select("opened_on") \
+        .eq("cycle_id", cycle_id).execute().data
+    events_by_day = {}
+    for row in openings:
+        d = day_of_cycle(placed_on, date.fromisoformat(row["opened_on"]))
+        if 1 <= d <= as_of_day:
+            events_by_day[d] = events_by_day.get(d, 0) + 1
+    actual = build_daily_series(events_by_day, as_of_day)
+
+    plan_rows = db.table("v_cycle_feed_plan").select("week, weekly_kg") \
+        .eq("cycle_id", cycle_id).execute().data
+    if not plan_rows:
+        return  # no feed plan entered yet — nothing to compare against
+    planned_full = planned_feed_curve(plan_rows, bag_size_kg, target)
+
+    totals = db.table("v_cycle_feed_totals").select("total_bags") \
+        .eq("cycle_id", cycle_id).maybe_single().execute().data
+    planned_total = float(totals["total_bags"]) if totals and totals.get("total_bags") else planned_full[-1]
+
+    remaining = target - as_of_day
+    forecast = forecast_forward(model, actual, remaining) if remaining > 0 else np.array([])
+    projected_total = forecast[-1] if len(forecast) else actual[-1]
+
+    series = make_series_payload(as_of_day, target, actual, planned_full, forecast)
+    upsert(db, cycle_id, "feed_bags", as_of_day, projected_total, planned_total, series)
+
+
+def process_mortality(db, model, cycle):
+    cycle_id = cycle["id"]
+    placed_on = date.fromisoformat(cycle["placed_on"])
+    target = cycle["target_sale_age"]
+    birds_placed = cycle["birds_placed"]
+    as_of_day = min(day_of_cycle(placed_on, date.today()), target)
+    if as_of_day < MIN_DAYS_OF_DATA:
+        return
+
+    assumptions = db.table("cycle_assumptions").select("mortality_rate") \
+        .eq("cycle_id", cycle_id).maybe_single().execute().data
+    mortality_rate = float(assumptions["mortality_rate"]) if assumptions else 0.05
+    planned_total = birds_placed * mortality_rate
+
+    checks = db.table("daily_checks").select("day_number, mortality, culls") \
+        .eq("cycle_id", cycle_id).lte("day_number", as_of_day).execute().data
+    events_by_day = {r["day_number"]: r["mortality"] + r["culls"] for r in checks}
+    actual = build_daily_series(events_by_day, as_of_day)
+
+    # No stored day-by-day mortality curve exists — unlike feed, there is
+    # only a single target rate. Spreading it in a straight line across the
+    # cycle is a reference for the chart, not a real plan, and is labelled
+    # that way wherever it's shown.
+    planned_full = np.linspace(planned_total / target, planned_total, target)
+
+    remaining = target - as_of_day
+    cap = birds_placed - actual[-1]  # can't lose more birds than remain
+    forecast = forecast_forward(model, actual, remaining) if remaining > 0 else np.array([])
+    if len(forecast):
+        forecast = np.minimum(forecast, actual[-1] + max(cap, 0))
+    projected_total = forecast[-1] if len(forecast) else actual[-1]
+
+    series = make_series_payload(as_of_day, target, actual, planned_full, forecast)
+    upsert(db, cycle_id, "mortality", as_of_day, projected_total, planned_total, series)
+
+
+def main():
+    db = get_client()
+    cycles = db.table("cycles").select("id, placed_on, target_sale_age, birds_placed") \
+        .is_("closed_at", "null").execute().data
+
+    if not cycles:
+        print("No open cycles — nothing to forecast.")
+        return
+
+    model = load_model()
+
+    for cycle in cycles:
+        try:
+            process_feed(db, model, cycle)
+            process_mortality(db, model, cycle)
+            print(f"cycle {cycle['id']}: forecast written")
+        except Exception as e:
+            # One cycle's bad data (e.g. no plan entered yet) shouldn't stop
+            # the rest of the farm's forecasts from being written.
+            print(f"cycle {cycle['id']}: skipped — {e}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()

@@ -197,6 +197,44 @@
       </div>
     </section>
 
+    <!-- ===== Forecast — written once a day by the forecast job, not the app.
+         Hidden until cycle_forecasts actually has rows for this cycle. ===== -->
+    <section class="panel" id="forecastPanel" hidden>
+      <div class="panel__head">
+        <h2 class="panel__title">Where this cycle is headed</h2>
+      </div>
+
+      <div id="feedForecastBlock" hidden>
+        <div class="fcr-head">
+          <div class="fcr-head__v tnum" id="feedForecastDelta">—</div>
+          <div class="fcr-head__t caption" id="feedForecastBasis"></div>
+        </div>
+        <svg viewBox="0 0 340 90" role="img" aria-labelledby="feedForecastDesc" style="width:100%;height:auto">
+          <desc id="feedForecastDesc">Bags opened so far, the planned bag curve, and the projected trajectory to the end of the cycle.</desc>
+          <g id="feedForecastPlan"></g>
+          <g id="feedForecastActual"></g>
+          <g id="feedForecastProjected"></g>
+          <g id="feedForecastLabels"></g>
+        </svg>
+      </div>
+
+      <div id="mortForecastBlock" hidden style="margin-top:1.4rem">
+        <div class="fcr-head">
+          <div class="fcr-head__v tnum" id="mortForecastDelta">—</div>
+          <div class="fcr-head__t caption" id="mortForecastBasis"></div>
+        </div>
+        <svg viewBox="0 0 340 90" role="img" aria-labelledby="mortForecastDesc" style="width:100%;height:auto">
+          <desc id="mortForecastDesc">Losses recorded so far, the mortality assumption spread across the cycle, and the projected trajectory.</desc>
+          <g id="mortForecastPlan"></g>
+          <g id="mortForecastActual"></g>
+          <g id="mortForecastProjected"></g>
+          <g id="mortForecastLabels"></g>
+        </svg>
+      </div>
+
+      <p class="caption" id="forecastNote" style="margin-top:.8rem"></p>
+    </section>
+
     <!-- ===== Money ===== -->
     <section class="panel">
       <div class="panel__head">

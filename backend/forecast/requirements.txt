@@ -1,0 +1,9 @@
+# Pinned to the exact versions verified end to end against a live install and
+# a live Supabase project on 2026-08-23 (Python 3.14). timesfm 2.0.2 is what
+# exposes the TimesFM_2p5_200M_torch class forecast.py's load_model() uses —
+# package version and model-generation name ("2.5") don't match, which is
+# easy to misread when picking a version range. Re-verify manually (see
+# README.md's first-run checklist) before bumping either of these.
+supabase==2.31.0
+timesfm[torch]==2.0.2
+numpy>=1.26

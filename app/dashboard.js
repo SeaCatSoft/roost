@@ -231,7 +231,8 @@ async function boot() {
 
   renderLifeBar(day, cycle.target_sale_age);
 
-  const [progress, todayRows, samples, bags, assumptions, plan, pnl] = await Promise.all([
+  const [progress, todayRows, samples, bags, assumptions, plan, pnl,
+         feedForecast, mortForecast] = await Promise.all([
     db.from('v_cycle_progress').select('*').eq('cycle_id', cycle.id).maybeSingle(),
     db.from('daily_checks').select('session').eq('cycle_id', cycle.id).eq('day_number', day),
     db.from('sample_weights').select('day_number, avg_weight_g')
@@ -240,7 +241,17 @@ async function boot() {
     db.from('cycle_assumptions').select('bag_size_kg, live_weight_lb')
       .eq('cycle_id', cycle.id).maybeSingle(),
     db.from('v_cycle_feed_plan').select('week, weekly_kg').eq('cycle_id', cycle.id).order('week'),
-    db.from('v_cycle_pnl').select('*').eq('cycle_id', cycle.id).maybeSingle()
+    db.from('v_cycle_pnl').select('*').eq('cycle_id', cycle.id).maybeSingle(),
+    // Written once a day by the forecast job (backend/forecast/), never by
+    // the app. Older databases have no cycle_forecasts table yet — fail
+    // soft, same as the session column check above, rather than blocking
+    // the rest of the dashboard on a table that might not exist.
+    db.from('cycle_forecasts').select('*').eq('cycle_id', cycle.id)
+      .eq('metric', 'feed_bags').order('generated_at', { ascending: false })
+      .limit(1).maybeSingle(),
+    db.from('cycle_forecasts').select('*').eq('cycle_id', cycle.id)
+      .eq('metric', 'mortality').order('generated_at', { ascending: false })
+      .limit(1).maybeSingle()
   ]);
 
   renderToday(day, todayRows.data || [], todayRows.error);
@@ -256,6 +267,7 @@ async function boot() {
   renderFeed({ day, cycle, plan: plan.data || [], bags: bags.data || [],
                bagSize: Number(assumptions.data?.bag_size_kg ?? 30) });
   renderMoney(pnl.data);
+  renderForecast(feedForecast.data, mortForecast.data);
 }
 
 /* ---------- Today's check ------------------------------------------------- */
@@ -504,6 +516,96 @@ function renderMoney(pnl) {
       ? `Clearing breakeven by ${num(gap, 2)} a pound. `
       : `Short of breakeven by ${num(Math.abs(gap), 2)} a pound. `) +
     'Modelled from this cycle\'s assumptions, not from processing records.';
+}
+
+/* ---------- Forecast (written by backend/forecast/, never by this file) --- */
+function forecastDelta(pct, overWord, underWord) {
+  const abs = Math.abs(pct);
+  if (abs < 5) return 'on plan';
+  return `${num(abs, 0)}% ${pct > 0 ? overWord : underWord}`;
+}
+
+function renderForecast(feed, mortality) {
+  const panel = $('forecastPanel');
+  if (!feed && !mortality) { panel.hidden = true; return; }
+  panel.hidden = false;
+
+  $('feedForecastBlock').hidden = !feed;
+  $('mortForecastBlock').hidden = !mortality;
+
+  if (feed) {
+    const pct = Number(feed.deviation_pct);
+    $('feedForecastDelta').textContent = forecastDelta(pct, 'over plan', 'under plan');
+    $('feedForecastDelta').style.color = Math.abs(pct) > 10 ? 'var(--warn)' : '';
+    $('feedForecastBasis').textContent =
+      `Day ${feed.as_of_day} of ${feed.series.length} — projecting ${num(feed.projected_total, 0)} ` +
+      `bags against a plan of ${num(feed.planned_total, 0)}.`;
+    drawTrajectoryChart(
+      [$('feedForecastPlan'), $('feedForecastActual'), $('feedForecastProjected'), $('feedForecastLabels')],
+      feed.series
+    );
+  }
+
+  if (mortality) {
+    const pct = Number(mortality.deviation_pct);
+    $('mortForecastDelta').textContent = forecastDelta(pct, 'above plan', 'below plan');
+    $('mortForecastDelta').style.color = Math.abs(pct) > 10 ? 'var(--warn)' : '';
+    $('mortForecastBasis').textContent =
+      `Day ${mortality.as_of_day} of ${mortality.series.length} — projecting ${num(mortality.projected_total, 0)} ` +
+      `birds lost against ${num(mortality.planned_total, 0)} assumed.`;
+    drawTrajectoryChart(
+      [$('mortForecastPlan'), $('mortForecastActual'), $('mortForecastProjected'), $('mortForecastLabels')],
+      mortality.series
+    );
+  }
+
+  $('forecastNote').textContent = 'Dashed grey is the plan, solid is what actually happened, ' +
+    'dashed colour is where the forecast projects the rest of the cycle.';
+}
+
+/* One shared line-chart shape for both forecasts: a muted dashed plan line,
+   a solid actual line up to today, and a dashed projected line continuing
+   from wherever the actual line stops — so there is no visual gap between
+   what happened and what's projected. */
+function drawTrajectoryChart(groups, series) {
+  const W = 340, H = 90, L = 4, R = 4, T = 6, B = 14;
+  const [planG, actualG, forecastG, labelsG] = groups;
+  [planG, actualG, forecastG, labelsG].forEach((g) => { g.textContent = ''; });
+
+  const days = series.length;
+  const max = Math.max(1, ...series.map((p) =>
+    Math.max(p.actual ?? 0, p.planned ?? 0, p.forecast ?? 0))) * 1.1;
+
+  const x = (day) => L + ((day - 1) / (days - 1)) * (W - L - R);
+  const y = (v) => H - B - (v / max) * (H - T - B);
+
+  const pathFrom = (pts) => pts.length
+    ? 'M ' + pts.map((p) => `${x(p.day).toFixed(1)} ${y(p.v).toFixed(1)}`).join(' L ')
+    : '';
+
+  const plannedPts = series.map((p) => ({ day: p.day, v: p.planned }));
+  const actualPts = series.filter((p) => p.actual != null).map((p) => ({ day: p.day, v: p.actual }));
+  const forecastPts = series.filter((p) => p.forecast != null).map((p) => ({ day: p.day, v: p.forecast }));
+  if (actualPts.length && forecastPts.length) forecastPts.unshift(actualPts[actualPts.length - 1]);
+
+  planG.appendChild(el('path', {
+    d: pathFrom(plannedPts), fill: 'none', stroke: 'var(--ink-3)',
+    'stroke-width': 1.5, 'stroke-dasharray': '3 3'
+  }));
+  actualG.appendChild(el('path', {
+    d: pathFrom(actualPts), fill: 'none', stroke: 'var(--ink)', 'stroke-width': 2.5
+  }));
+  forecastG.appendChild(el('path', {
+    d: pathFrom(forecastPts), fill: 'none', stroke: 'var(--accent)',
+    'stroke-width': 2.5, 'stroke-dasharray': '2 3'
+  }));
+
+  labelsG.appendChild(el('text', {
+    x: L, y: H - 2, 'font-size': '9', fill: 'var(--ink-3)'
+  }, 'Day 1'));
+  labelsG.appendChild(el('text', {
+    x: W - R, y: H - 2, 'text-anchor': 'end', 'font-size': '9', fill: 'var(--ink-3)'
+  }, `Day ${days}`));
 }
 
 boot();

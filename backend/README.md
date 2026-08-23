@@ -139,6 +139,16 @@ the plan against.
 
 ---
 
+## Forecast job
+
+`migrations/018_forecast.sql` adds `cycle_forecasts`, written once a day by
+`forecast/forecast.py` (GitHub Actions, not the app) using Google's TimesFM to
+project where feed-bag usage and mortality are headed against plan. Read-only
+from the app — see [`forecast/README.md`](forecast/README.md) before enabling
+the schedule, it has not been run against a live install yet.
+
+---
+
 ## Next
 
 The schema is Phase 1 only — flock, feed, health, processing, assets. Invoicing

@@ -124,6 +124,27 @@
       <p class="caption" id="forecastNote" style="margin-top:1rem"></p>
     </section>
 
+    <!-- ===== Cycle forecasts opt-in. Separate from the "Where this cycle is
+         heading" panel above (that one's the breed-curve projection) — this
+         is the TimesFM feed/mortality forecast shown on the flock
+         dashboard. ===== -->
+    <section class="panel">
+      <div class="panel__head">
+        <h2 class="panel__title">Cycle forecasts (beta)</h2>
+      </div>
+      <p class="caption" style="margin-top:.25rem;margin-bottom:.9rem">
+        A once-a-day machine-learning forecast (Google's TimesFM) of where
+        feed use and mortality are headed against plan, shown as a card on
+        the flock dashboard. Off by default — nothing runs on your data until
+        you turn this on.
+      </p>
+      <div class="switch-row">
+        <span class="switch-row__label" id="forecastOptInLabel">Enable cycle forecasts</span>
+        <button type="button" class="switch" id="forecastOptInSwitch" role="switch" aria-checked="false" aria-labelledby="forecastOptInLabel"></button>
+      </div>
+      <p class="field__hint" id="forecastOptInHint" style="margin-top:.5rem"></p>
+    </section>
+
     <!-- ===== Owner actions ===== -->
     <nav class="tiles">
       <a class="tile" href="invoices.html">

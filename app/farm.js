@@ -55,11 +55,22 @@ async function boot() {
   show('app');
   showError(null);
 
-  const { data: farms } = await db.from('farms').select('id, name').order('id').limit(1);
+  let { data: farms, error: farmsError } = await db.from('farms')
+    .select('id, name, forecast_opt_in').order('id').limit(1);
+
+  // Older databases have no forecast_opt_in yet (migration 019). Fall back
+  // to what does exist rather than blocking the whole owner view on one
+  // optional toggle.
+  if (farmsError && farmsError.message.includes('does not exist')) {
+    state.forecastOptInUnsupported = true;
+    ({ data: farms } = await db.from('farms').select('id, name').order('id').limit(1));
+  }
+
   if (!farms || !farms.length) { showError('No farm is linked to this account yet.'); return; }
   state.farm = farms[0];
   $('barTitle').textContent = state.farm.name;
   $('farmTitle').textContent = state.farm.name;
+  renderForecastOptIn();
 
   const [ageing, balances, unsent, cycles, book] = await Promise.all([
     db.from('v_invoice_ageing').select('*').maybeSingle(),
@@ -372,6 +383,44 @@ async function renderForecast() {
     ? parts.join(' ')
     : 'Tracking close to plan on both weight and feed.';
 }
+
+/* ---------- Cycle forecasts opt-in ----------------------------------------
+   Off by default (018/019): a stranger's real farm data should not run
+   through an experimental analytics feature until its owner chooses it.
+   Writing straight to farms on toggle, same as any other owner-only setting
+   — RLS's farms_write policy is what actually enforces "only the owner". */
+function renderForecastOptIn() {
+  const btn = $('forecastOptInSwitch');
+  const hint = $('forecastOptInHint');
+
+  if (state.forecastOptInUnsupported) {
+    btn.disabled = true;
+    hint.textContent = 'Needs migration 019 — run 019_forecast_opt_in.sql in Supabase to enable this.';
+    return;
+  }
+
+  btn.setAttribute('aria-checked', String(!!state.farm.forecast_opt_in));
+  hint.textContent = state.farm.forecast_opt_in
+    ? 'On — this farm\'s data is included in the daily forecast run.'
+    : 'Off — this farm is not included in the daily forecast run.';
+}
+
+$('forecastOptInSwitch').addEventListener('click', async () => {
+  const btn = $('forecastOptInSwitch');
+  const next = btn.getAttribute('aria-checked') !== 'true';
+
+  btn.disabled = true;
+  const { error } = await db.from('farms')
+    .update({ forecast_opt_in: next }).eq('id', state.farm.id);
+  btn.disabled = false;
+
+  if (error) {
+    $('forecastOptInHint').textContent = `Could not save: ${error.message}`;
+    return;
+  }
+  state.farm.forecast_opt_in = next;
+  renderForecastOptIn();
+});
 
 $('signOutBtn').addEventListener('click', async () => {
   await db.auth.signOut();

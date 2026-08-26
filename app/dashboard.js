@@ -232,13 +232,13 @@ async function boot() {
   renderLifeBar(day, cycle.target_sale_age);
 
   const [progress, todayRows, samples, bags, assumptions, plan, pnl,
-         feedForecast, mortForecast] = await Promise.all([
+         feedForecast, mortForecast, dailyChecks] = await Promise.all([
     db.from('v_cycle_progress').select('*').eq('cycle_id', cycle.id).maybeSingle(),
     db.from('daily_checks').select('session').eq('cycle_id', cycle.id).eq('day_number', day),
     db.from('sample_weights').select('day_number, avg_weight_g')
       .eq('cycle_id', cycle.id).order('day_number'),
     db.from('feed_bag_openings').select('opened_on').eq('cycle_id', cycle.id),
-    db.from('cycle_assumptions').select('bag_size_kg, live_weight_lb')
+    db.from('cycle_assumptions').select('bag_size_kg, live_weight_lb, mortality_rate')
       .eq('cycle_id', cycle.id).maybeSingle(),
     db.from('v_cycle_feed_plan').select('week, weekly_kg').eq('cycle_id', cycle.id).order('week'),
     db.from('v_cycle_pnl').select('*').eq('cycle_id', cycle.id).maybeSingle(),
@@ -251,7 +251,12 @@ async function boot() {
       .limit(1).maybeSingle(),
     db.from('cycle_forecasts').select('*').eq('cycle_id', cycle.id)
       .eq('metric', 'mortality').order('generated_at', { ascending: false })
-      .limit(1).maybeSingle()
+      .limit(1).maybeSingle(),
+    // For the simple forecast's mortality series — cumulative losses need
+    // every day up to today, not just today's, which is all the today-card
+    // query above asks for.
+    db.from('daily_checks').select('day_number, mortality, culls')
+      .eq('cycle_id', cycle.id).lte('day_number', day)
   ]);
 
   renderToday(day, todayRows.data || [], todayRows.error);
@@ -267,7 +272,18 @@ async function boot() {
   renderFeed({ day, cycle, plan: plan.data || [], bags: bags.data || [],
                bagSize: Number(assumptions.data?.bag_size_kg ?? 30) });
   renderMoney(pnl.data);
-  renderForecast(feedForecast.data, mortForecast.data);
+
+  const simpleFeed = computeSimpleFeedForecast({
+    day, target: cycle.target_sale_age, plan: plan.data || [],
+    bags: bags.data || [], bagSize: Number(assumptions.data?.bag_size_kg ?? 30),
+    placedOn: cycle.placed_on
+  });
+  const simpleMortality = computeSimpleMortalityForecast({
+    day, target: cycle.target_sale_age, birdsPlaced: cycle.birds_placed,
+    mortalityRate: Number(assumptions.data?.mortality_rate ?? 0.05),
+    dailyChecks: dailyChecks.data || []
+  });
+  renderForecast({ simpleFeed, mlFeed: feedForecast.data, simpleMortality, mlMortality: mortForecast.data });
 }
 
 /* ---------- Today's check ------------------------------------------------- */
@@ -470,17 +486,23 @@ function drawFcrChart(points) {
 }
 
 /* ---------- Feed against plan --------------------------------------------- */
+/* Each week's requirement spread evenly across its seven days. Shared by the
+   bags-vs-plan bars below and the simple forecast further down, so "planned
+   bags by day X" means the same number in both places rather than two
+   almost-identical formulas drifting apart over time. */
+function plannedCumulativeBagsAt(plan, bagSize, day) {
+  let kg = 0;
+  plan.forEach((w) => {
+    const start = (w.week - 1) * 7;
+    kg += (Number(w.weekly_kg) / 7) * Math.min(7, Math.max(0, day - start));
+  });
+  return kg / bagSize;
+}
+
 function renderFeed({ day, cycle, plan, bags, bagSize }) {
   if (!plan.length) return;
 
-  // Each week's requirement spread across its seven days.
-  let plannedKg = 0;
-  plan.forEach((w) => {
-    const start = (w.week - 1) * 7;
-    plannedKg += (Number(w.weekly_kg) / 7) * Math.min(7, Math.max(0, day - start));
-  });
-
-  const plannedBags = plannedKg / bagSize;
+  const plannedBags = plannedCumulativeBagsAt(plan, bagSize, day);
   const actualBags = bags.length;
   const max = Math.max(plannedBags, actualBags, 1);
 
@@ -551,43 +573,203 @@ function feedPaceNote(feed) {
     `and not a bag that went unrecorded before changing anything.`;
 }
 
-function renderForecast(feed, mortality) {
+/* ---------- Simple forecast: pure arithmetic, no model, always available --
+   The same question the TimesFM job answers (backend/forecast/), by a
+   different, fully transparent method: how far off the plan's own shape is
+   this cycle running so far, and what does that ratio imply if it holds for
+   the rest of the cycle. Needs nothing turned on, costs nothing to compute,
+   and — because both are shown together, labelled by method — this is also
+   the honest way to find out whether the ML version is actually adding
+   anything: watch the two side by side as cycles close.
+
+   Deliberately not a flat extrapolation of "the rate so far": feed intake
+   ramps up hard from Starter to Finisher, so a flat rate from an early day
+   would understate the finish badly. Scaling the plan's own curve by the
+   observed over/under-run ratio respects that shape while still reacting to
+   this cycle's real pace — the same technique the processing planner
+   (planning.js) and My Farm's own forecast (farm.js) already use for weight.
+
+   Same minimum-days floor as the ML job, and for the same reason: a ratio
+   taken from one or two noisy early days is more likely to mislead than
+   inform, on either method. */
+const SIMPLE_FORECAST_MIN_DAYS = 5;
+
+function plannedCumulativeMortalityAt(birdsPlaced, mortalityRate, target, day) {
+  // No stored day-by-day mortality curve exists — only the single assumed
+  // rate — so a straight-line spread across the cycle is the plan here, a
+  // reference line rather than a real curve. This matches exactly what the
+  // forecast job assumes for the same reason, so the two "planned" lines
+  // agree and the comparison is fair.
+  const total = birdsPlaced * mortalityRate;
+  return total * (Math.min(day, target) / target);
+}
+
+function computeSimpleFeedForecast({ day, target, plan, bags, bagSize, placedOn }) {
+  if (!plan.length || day < SIMPLE_FORECAST_MIN_DAYS) return null;
+
+  const plannedSoFar = plannedCumulativeBagsAt(plan, bagSize, day);
+  const plannedTotal = plannedCumulativeBagsAt(plan, bagSize, target);
+  if (plannedSoFar <= 0 || plannedTotal <= 0) return null;
+
+  // Cumulative bags opened, one entry per day of the cycle so far — the
+  // chart's solid "actual" line needs the whole trail, not just today's
+  // total, the same as the ML forecast's own series does.
+  const opensByDay = new Array(day + 1).fill(0);
+  bags.forEach((b) => {
+    const d = daysBetween(placedOn, b.opened_on) + 1;
+    if (d >= 1 && d <= day) opensByDay[d] += 1;
+  });
+  const actualCum = new Array(day + 1).fill(0);
+  for (let d = 1; d <= day; d++) actualCum[d] = actualCum[d - 1] + opensByDay[d];
+  const actualSoFar = actualCum[day];
+
+  const pace = actualSoFar / plannedSoFar;
+  const projectedTotal = plannedTotal * pace;
+
+  const series = [];
+  let prevProjected = actualSoFar;
+  for (let d = 1; d <= target; d++) {
+    const planned = plannedCumulativeBagsAt(plan, bagSize, d);
+    let forecast = null;
+    if (d > day) {
+      // The plan's own shape (Starter low, Finisher high) scaled by how far
+      // off it this cycle has run so far — not a flat rate, which would
+      // badly understate a cycle still early in Starter.
+      const raw = actualSoFar + pace * (planned - plannedSoFar);
+      prevProjected = Math.max(prevProjected, raw); // a cumulative count never falls
+      forecast = prevProjected;
+    }
+    series.push({
+      day: d,
+      actual: d <= day ? actualCum[d] : null,
+      planned: Math.round(planned * 100) / 100,
+      forecast: forecast == null ? null : Math.round(forecast * 100) / 100
+    });
+  }
+
+  const deviationPct = ((projectedTotal - plannedTotal) / plannedTotal) * 100;
+  return { as_of_day: day, projected_total: projectedTotal, planned_total: plannedTotal,
+           deviation_pct: deviationPct, series };
+}
+
+function computeSimpleMortalityForecast({ day, target, birdsPlaced, mortalityRate, dailyChecks }) {
+  if (day < SIMPLE_FORECAST_MIN_DAYS || !dailyChecks.length) return null;
+
+  const plannedSoFar = plannedCumulativeMortalityAt(birdsPlaced, mortalityRate, target, day);
+  const plannedTotal = birdsPlaced * mortalityRate;
+  if (plannedSoFar <= 0 || plannedTotal <= 0) return null;
+
+  const lossByDay = new Array(day + 1).fill(0);
+  dailyChecks.forEach((c) => {
+    const d = c.day_number;
+    if (d >= 1 && d <= day) lossByDay[d] += (c.mortality || 0) + (c.culls || 0);
+  });
+  const actualCum = new Array(day + 1).fill(0);
+  for (let d = 1; d <= day; d++) actualCum[d] = actualCum[d - 1] + lossByDay[d];
+  const actualSoFar = actualCum[day];
+
+  const pace = actualSoFar / plannedSoFar;
+  const rawProjectedTotal = plannedTotal * pace;
+  // Can't lose more birds than remain alive — the same physical clamp the
+  // forecast job applies, for the same reason: a model or a ratio can both
+  // extrapolate past what's physically possible if nothing stops it.
+  const cap = birdsPlaced - actualSoFar;
+  const projectedTotal = Math.min(rawProjectedTotal, actualSoFar + Math.max(cap, 0));
+
+  const series = [];
+  let prevProjected = actualSoFar;
+  for (let d = 1; d <= target; d++) {
+    const planned = plannedCumulativeMortalityAt(birdsPlaced, mortalityRate, target, d);
+    let forecast = null;
+    if (d > day) {
+      const raw = actualSoFar + pace * (planned - plannedSoFar);
+      const clamped = Math.min(raw, actualSoFar + Math.max(cap, 0));
+      prevProjected = Math.max(prevProjected, clamped);
+      forecast = prevProjected;
+    }
+    series.push({
+      day: d,
+      actual: d <= day ? actualCum[d] : null,
+      planned: Math.round(planned * 100) / 100,
+      forecast: forecast == null ? null : Math.round(forecast * 100) / 100
+    });
+  }
+
+  const deviationPct = ((projectedTotal - plannedTotal) / plannedTotal) * 100;
+  return { as_of_day: day, projected_total: projectedTotal, planned_total: plannedTotal,
+           deviation_pct: deviationPct, series };
+}
+
+function renderForecast({ simpleFeed, mlFeed, simpleMortality, mlMortality }) {
   const panel = $('forecastPanel');
-  if (!feed && !mortality) { panel.hidden = true; return; }
+  const anything = simpleFeed || mlFeed || simpleMortality || mlMortality;
+  if (!anything) { panel.hidden = true; return; }
   panel.hidden = false;
 
-  $('feedForecastBlock').hidden = !feed;
-  $('mortForecastBlock').hidden = !mortality;
+  $('feedForecastBlock').hidden = !(simpleFeed || mlFeed);
+  $('mortForecastBlock').hidden = !(simpleMortality || mlMortality);
 
-  if (feed) {
-    const pct = Number(feed.deviation_pct);
-    $('feedForecastDelta').textContent = forecastDelta(pct, 'over plan', 'under plan');
-    $('feedForecastDelta').style.color = Math.abs(pct) > 10 ? 'var(--warn)' : '';
-    $('feedForecastBasis').textContent =
-      `Day ${feed.as_of_day} of ${feed.series.length} — projecting ${num(feed.projected_total, 0)} ` +
-      `bags against a plan of ${num(feed.planned_total, 0)}.`;
-    drawTrajectoryChart(
-      [$('feedForecastPlan'), $('feedForecastActual'), $('feedForecastProjected'), $('feedForecastLabels')],
-      feed.series
-    );
-    $('feedForecastPace').textContent = feedPaceNote(feed);
+  renderForecastBlock({
+    simple: simpleFeed, ml: mlFeed, overWord: 'over plan', underWord: 'under plan',
+    simpleIds: FEED_SIMPLE_IDS, mlIds: FEED_ML_IDS,
+    mlBasis: (f) => `Day ${f.as_of_day} of ${f.series.length} — projecting ${num(f.projected_total, 0)} ` +
+      `bags against a plan of ${num(f.planned_total, 0)}.`,
+    simpleBasis: (f) => `Day ${f.as_of_day} of ${f.series.length} — projecting ${num(f.projected_total, 0)} ` +
+      `bags against a plan of ${num(f.planned_total, 0)}, at this cycle's own pace so far.`
+  });
+  if (mlFeed) $('feedForecastPace').textContent = feedPaceNote(mlFeed);
+
+  renderForecastBlock({
+    simple: simpleMortality, ml: mlMortality, overWord: 'above plan', underWord: 'below plan',
+    simpleIds: MORT_SIMPLE_IDS, mlIds: MORT_ML_IDS,
+    mlBasis: (f) => `Day ${f.as_of_day} of ${f.series.length} — projecting ${num(f.projected_total, 0)} ` +
+      `birds lost against ${num(f.planned_total, 0)} assumed.`,
+    simpleBasis: (f) => `Day ${f.as_of_day} of ${f.series.length} — projecting ${num(f.projected_total, 0)} ` +
+      `birds lost against ${num(f.planned_total, 0)} assumed, at this cycle's own pace so far.`
+  });
+
+  $('forecastNote').textContent = simpleFeed || simpleMortality
+    ? (mlFeed || mlMortality
+        ? 'Dashed grey is the plan, solid is what actually happened, dashed colour is the projection. ' +
+          'Two methods, shown separately — where they agree is a stronger signal than either alone; ' +
+          'where they disagree is worth a second look before trusting either.'
+        : 'Dashed grey is the plan, solid is what actually happened, dashed colour is a projection from ' +
+          'this cycle\'s own pace so far — plain arithmetic, not a model.')
+    : 'Dashed grey is the plan, solid is what actually happened, ' +
+      'dashed colour is where the forecast projects the rest of the cycle.';
+}
+
+const FEED_SIMPLE_IDS = ['feedSimpleBlock', 'feedSimpleDelta', 'feedSimpleBasis', 'feedSimplePlan', 'feedSimpleActual', 'feedSimpleProjected', 'feedSimpleLabels'];
+const FEED_ML_IDS = ['feedMlBlock', 'feedForecastDelta', 'feedForecastBasis', 'feedForecastPlan', 'feedForecastActual', 'feedForecastProjected', 'feedForecastLabels'];
+const MORT_SIMPLE_IDS = ['mortSimpleBlock', 'mortSimpleDelta', 'mortSimpleBasis', 'mortSimplePlan', 'mortSimpleActual', 'mortSimpleProjected', 'mortSimpleLabels'];
+const MORT_ML_IDS = ['mortMlBlock', 'mortForecastDelta', 'mortForecastBasis', 'mortForecastPlan', 'mortForecastActual', 'mortForecastProjected', 'mortForecastLabels'];
+
+/* One metric, up to two methods. Kept as one function rather than copy-pasted
+   per metric per method, since feed and mortality only ever differ in their
+   wording and which computed object feeds them — the rendering itself, and
+   the chart underneath it, is identical. */
+function renderForecastBlock({ simple, ml, overWord, underWord, simpleIds, mlIds, mlBasis, simpleBasis }) {
+  const [sBlock, sDelta, sBasisEl, sPlan, sActual, sProjected, sLabels] = simpleIds.map($);
+  const [mBlock, mDelta, mBasisEl, mPlan, mActual, mProjected, mLabels] = mlIds.map($);
+
+  sBlock.hidden = !simple;
+  mBlock.hidden = !ml;
+
+  if (simple) {
+    const pct = Number(simple.deviation_pct);
+    sDelta.textContent = forecastDelta(pct, overWord, underWord);
+    sDelta.style.color = Math.abs(pct) > 10 ? 'var(--warn)' : '';
+    sBasisEl.textContent = simpleBasis(simple);
+    drawTrajectoryChart([sPlan, sActual, sProjected, sLabels], simple.series);
   }
 
-  if (mortality) {
-    const pct = Number(mortality.deviation_pct);
-    $('mortForecastDelta').textContent = forecastDelta(pct, 'above plan', 'below plan');
-    $('mortForecastDelta').style.color = Math.abs(pct) > 10 ? 'var(--warn)' : '';
-    $('mortForecastBasis').textContent =
-      `Day ${mortality.as_of_day} of ${mortality.series.length} — projecting ${num(mortality.projected_total, 0)} ` +
-      `birds lost against ${num(mortality.planned_total, 0)} assumed.`;
-    drawTrajectoryChart(
-      [$('mortForecastPlan'), $('mortForecastActual'), $('mortForecastProjected'), $('mortForecastLabels')],
-      mortality.series
-    );
+  if (ml) {
+    const pct = Number(ml.deviation_pct);
+    mDelta.textContent = forecastDelta(pct, overWord, underWord);
+    mDelta.style.color = Math.abs(pct) > 10 ? 'var(--warn)' : '';
+    mBasisEl.textContent = mlBasis(ml);
+    drawTrajectoryChart([mPlan, mActual, mProjected, mLabels], ml.series);
   }
-
-  $('forecastNote').textContent = 'Dashed grey is the plan, solid is what actually happened, ' +
-    'dashed colour is where the forecast projects the rest of the cycle.';
 }
 
 /* One shared line-chart shape for both forecasts: a muted dashed plan line,

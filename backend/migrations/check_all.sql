@@ -1,9 +1,13 @@
 -- =============================================================================
 -- Roost — migration audit
 --
--- Not a migration. Checks which of 001-017 have actually been applied, by
+-- Not a migration. Checks which of 001-020 have actually been applied, by
 -- looking for one distinctive object each creates. Run this any time you are
 -- unsure what state the database is in.
+--
+-- This file is shared across every branch of work regardless of who added
+-- which migration, so every migration gets a row here even ones added
+-- elsewhere — a gap would just be a blind spot the next person trips over.
 --
 -- Every row should say ok. Anything else names the migration to (re-)run.
 -- =============================================================================
@@ -31,6 +35,12 @@ select * from (values
                            and to_regclass('public.v_unsent_invoices') is not null),
   ('017_orders_stock',         to_regclass('public.orders') is not null
                            and to_regclass('public.v_stock') is not null
-                           and to_regprocedure('public.invoice_from_order(bigint)') is not null)
+                           and to_regprocedure('public.invoice_from_order(bigint)') is not null),
+  ('018_forecast',             to_regclass('public.cycle_forecasts') is not null),
+  ('019_forecast_opt_in',      exists (select 1 from information_schema.columns
+                                        where table_name='farms' and column_name='forecast_opt_in')),
+  ('020_processing_bookings',  to_regclass('public.processing_bookings') is not null
+                           and to_regclass('public.v_processing_bookings') is not null
+                           and to_regprocedure('public.can_own_booking(bigint)') is not null)
 ) as t(migration, applied)
 order by migration;

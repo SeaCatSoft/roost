@@ -22,7 +22,13 @@ if (!isConfigured) { show('setup'); throw new Error('Supabase is not configured'
 
 const state = {
   cycle: null, lines: [], mix: [], runs: [],
-  editing: null, outputs: new Map(), pending: null, readOnly: false
+  editing: null, outputs: new Map(), pending: null, readOnly: false,
+
+  // Booking a processing day and inviting people to it. isOwner is a
+  // stricter gate than readOnly above — a member can record a run on this
+  // same screen, but booking the date and emailing people is the owner's
+  // call, same as starting a cycle or changing assumptions.
+  farm: null, isOwner: false, booking: null, recipients: []
 };
 
 const num = (n, d = 0) =>
@@ -66,11 +72,249 @@ async function boot() {
   renderRuns();
   renderCompare(actual.data);
 
-  state.readOnly = !canEdit(await myRole());
+  const role = await myRole();
+  state.readOnly = !canEdit(role);
+  state.isOwner = role === 'owner';
   if (state.readOnly) {
     $('addRunBtn').disabled = true;
     lockForViewer($('formPanel'), 'You have view-only access. Runs are shown, but cannot be recorded.');
   }
+
+  const { data: farms } = await db.from('farms').select('id, name').order('id').limit(1);
+  state.farm = farms && farms.length ? farms[0] : null;
+
+  await loadBooking();
+}
+
+/* ---------- Processing day booking ----------------------------------------
+   Read-only for everyone (knowing the date matters for the daily work too);
+   booking and sending is the owner's call, enforced by RLS (018) as well as
+   by this screen only showing the editor to an owner. */
+async function loadBooking() {
+  if (!state.farm) return;
+
+  const { data: booking, error } = await db
+    .from('v_processing_bookings')
+    .select('*')
+    .eq('cycle_id', state.cycle.id)
+    .maybeSingle();
+
+  if (error && !error.message.includes('does not exist')) {
+    showError(`Could not load the processing booking: ${error.message}`);
+  }
+  if (error && error.message.includes('does not exist')) {
+    // Migration 018 not applied yet — booking simply is not offered rather
+    // than breaking the rest of the screen, which does not depend on it.
+    return;
+  }
+
+  state.booking = booking || null;
+
+  if (state.booking) {
+    const { data: invites } = await db
+      .from('processing_booking_invites')
+      .select('id, email, name, sent_at, sent_for_seq, error')
+      .eq('booking_id', state.booking.id)
+      .order('id');
+    state.recipients = (invites || []).map((i) => ({ ...i }));
+  } else {
+    state.recipients = [];
+  }
+
+  renderBookingBanner();
+
+  if (state.isOwner) {
+    $('bookingPanel').hidden = false;
+    await fillBookingForm();
+  }
+}
+
+function renderBookingBanner() {
+  const b = state.booking;
+  const banner = $('bookingBanner');
+
+  // Owners get the full editor below instead — showing both says the same
+  // thing twice.
+  if (state.isOwner || !b) { banner.hidden = true; return; }
+
+  const when = b.booked_time ? `${shortDate(b.booked_on)} at ${b.booked_time.slice(0, 5)}` : shortDate(b.booked_on);
+  banner.hidden = false;
+  $('bookingBannerText').innerHTML =
+    `Processing booked for <strong>${when}</strong>${b.location ? ` at ${b.location}` : ''}.` +
+    (b.is_past ? ' <span class="caption">(this date has passed)</span>' : '');
+}
+
+/* Farm members are offered by default — a booking with nobody on it is
+   rarely what was meant — and anyone already invited stays listed even if
+   they have since left the farm, since the invite was already sent. */
+async function fillBookingForm() {
+  $('bDate').value = state.booking ? state.booking.booked_on : '';
+  $('bTime').value = state.booking?.booked_time ? state.booking.booked_time.slice(0, 5) : '';
+  $('bLocation').value = state.booking?.location ?? '';
+  $('bNotes').value = state.booking?.notes ?? '';
+
+  $('bookingStatus').textContent = state.booking
+    ? `${num(state.booking.invites_sent)} of ${num(state.booking.invite_count)} sent` +
+      (state.booking.invites_stale ? ` · ${num(state.booking.invites_stale)} need resending` : '')
+    : 'Not booked yet';
+
+  // Merged in every time, not only when the list starts empty — someone who
+  // joins the farm after the first booking should still show up as a
+  // candidate next time this opens, not just on the very first booking ever
+  // made for this cycle.
+  const { data: people } = await db.rpc('farm_people', { p_farm_id: state.farm.id });
+  const already = new Set(state.recipients.map((r) => r.email.toLowerCase()));
+  (people || []).forEach((p) => {
+    if (already.has(p.email.toLowerCase())) return;
+    state.recipients.push({ id: null, email: p.email, name: null, sent_at: null, sent_for_seq: null, error: null });
+    already.add(p.email.toLowerCase());
+  });
+
+  renderRecipients();
+}
+
+function renderRecipients() {
+  const wrap = $('recipientList');
+  wrap.textContent = '';
+
+  if (!state.recipients.length) {
+    wrap.innerHTML = '<p class="caption">Nobody added yet.</p>';
+    return;
+  }
+
+  state.recipients.forEach((r, idx) => {
+    const row = document.createElement('div');
+    row.className = 'recip-row';
+
+    const stale = state.booking && r.sent_at && r.sent_for_seq !== state.booking.sequence_no;
+    const chip = r.error
+      ? '<span class="inv-state inv-state--warn">failed</span>'
+      : stale
+        ? '<span class="inv-state inv-state--warn">resend</span>'
+        : r.sent_at
+          ? '<span class="inv-state inv-state--ok">sent</span>'
+          : '<span class="inv-state inv-state--muted">pending</span>';
+
+    row.innerHTML =
+      `<span class="recip-row__email" title="${r.email}">${r.email}</span>
+       ${chip}
+       <button type="button" class="inv-line__x" aria-label="Remove ${r.email}" data-press>
+         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+       </button>`;
+
+    row.querySelector('.inv-line__x').addEventListener('click', () => {
+      state.recipients.splice(idx, 1);
+      renderRecipients();
+    });
+
+    if (r.error) row.title = r.error;
+    wrap.appendChild(row);
+  });
+}
+
+$('addEmailBtn').addEventListener('click', () => {
+  const input = $('addEmail');
+  const email = input.value.trim().toLowerCase();
+  if (!email) return;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError('That does not look like a full email address.'); return; }
+  if (state.recipients.some((r) => r.email.toLowerCase() === email)) { showError('Already on the list.'); input.value = ''; return; }
+
+  state.recipients.push({ id: null, email, name: null, sent_at: null, sent_for_seq: null, error: null });
+  input.value = '';
+  showError(null);
+  renderRecipients();
+});
+
+$('saveBookingBtn').addEventListener('click', async () => {
+  const btn = $('saveBookingBtn');
+  showError(null);
+  $('inviteResult').textContent = '';
+
+  const date = $('bDate').value;
+  if (!date) { showError('Pick a processing date.'); return; }
+  if (!state.recipients.length) { showError('Add at least one person to invite.'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  // One booking per cycle: created the first time, updated every time after.
+  // The trigger behind this (018) only advances the calendar SEQUENCE when
+  // the date, time or location actually changes — editing just the notes
+  // does not force everyone's calendar to re-confirm.
+  const { data: saved, error: saveErr } = await db
+    .from('processing_bookings')
+    .upsert({
+      farm_id: state.farm.id,
+      cycle_id: state.cycle.id,
+      booked_on: date,
+      booked_time: $('bTime').value || null,
+      location: $('bLocation').value.trim() || null,
+      notes: $('bNotes').value.trim() || null,
+      created_by: (await db.auth.getSession()).data.session?.user?.id ?? null
+    }, { onConflict: 'cycle_id' })
+    .select()
+    .single();
+
+  if (saveErr) {
+    btn.disabled = false; btn.textContent = 'Save & send invites';
+    showError(saveErr.message);
+    return;
+  }
+
+  state.booking = saved;
+
+  // Reconcile who is actually on the list: drop anyone removed, add anyone
+  // new. Existing recipients that survived are left untouched here — their
+  // sent status is what decides whether the function below re-sends to them.
+  const { data: existing } = await db
+    .from('processing_booking_invites')
+    .select('id, email')
+    .eq('booking_id', saved.id);
+
+  const keepEmails = new Set(state.recipients.map((r) => r.email.toLowerCase()));
+  const toDelete = (existing || []).filter((e) => !keepEmails.has(e.email.toLowerCase()));
+  const existingEmails = new Set((existing || []).map((e) => e.email.toLowerCase()));
+  const toInsert = state.recipients.filter((r) => !existingEmails.has(r.email.toLowerCase()));
+
+  if (toDelete.length) {
+    await db.from('processing_booking_invites').delete().in('id', toDelete.map((e) => e.id));
+  }
+  if (toInsert.length) {
+    await db.from('processing_booking_invites').insert(
+      toInsert.map((r) => ({ booking_id: saved.id, email: r.email, name: r.name || null }))
+    );
+  }
+
+  btn.textContent = 'Sending…';
+
+  const { data, error } = await db.functions.invoke('send-processing-invite', {
+    body: { booking_id: saved.id }
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Save & send invites';
+
+  if (error) { showError(await readFunctionError(error)); await loadBooking(); return; }
+  if (data?.error) { showError(data.error); await loadBooking(); return; }
+
+  $('inviteResult').innerHTML =
+    `<p class="caption" style="margin-top:.9rem">` +
+    `${num(data.sent)} invite${data.sent === 1 ? '' : 's'} sent` +
+    (data.failed ? `, ${num(data.failed)} failed — check the addresses below` : '.') +
+    `</p>`;
+
+  await loadBooking();
+});
+
+async function readFunctionError(error) {
+  if (error?.context?.json) {
+    try {
+      const body = await error.context.json();
+      if (body?.error) return body.error;
+    } catch { /* not JSON — fall through */ }
+  }
+  return error?.message ||
+    'Could not reach the invite function. Has send-processing-invite been deployed in Supabase?';
 }
 
 const priceFor = (lineId) =>

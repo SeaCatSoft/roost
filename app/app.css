@@ -795,4 +795,16 @@ body { background: var(--page); }
   .inv-line__x     { grid-area: x; }
 }
 
+/* ---------- Processing booking recipients ---------- */
+.recip-row {
+  display: grid; grid-template-columns: 1fr auto auto;
+  align-items: center; gap: .6rem;
+  padding: .5rem 0;
+}
+.recip-row + .recip-row { border-top: 1px solid var(--hairline-2); }
+.recip-row__email {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: .875rem;
+}
+
 [hidden] { display: none !important; }

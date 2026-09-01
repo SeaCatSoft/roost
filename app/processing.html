@@ -52,6 +52,10 @@
         Every money figure so far has been modelled from your assumptions. From
         here it is what happened.
       </p>
+      <!-- Only shown once at least one bird has actually been sent — the
+           ordinary single-run case has nothing to say here that the runs
+           list below doesn't already. -->
+      <p class="caption" id="sentSoFar" style="margin-top:.6rem" hidden></p>
     </section>
 
     <!-- ===== Processing day, read-only summary for everyone ===== -->
@@ -84,6 +88,19 @@
           <span class="setting__label">Location <span class="caption">(optional)</span></span>
           <span class="setting__input"><input id="bLocation" type="text" placeholder="Processor name or address"></span>
         </label>
+      </div>
+
+      <div class="field" style="margin-top:1rem">
+        <label>How many birds</label>
+        <div class="segment" data-segment="birdsScope">
+          <button type="button" data-value="all" aria-pressed="true" data-press>All of them</button>
+          <button type="button" data-value="some" aria-pressed="false" data-press>Some of them</button>
+        </div>
+        <div class="setting__input" id="birdsSomeField" hidden style="margin-top:.6rem;max-width:200px">
+          <input id="bBirds" type="number" inputmode="numeric" min="1" step="1">
+          <span class="setting__unit">birds</span>
+        </div>
+        <span class="field__hint" id="birdsHint" style="margin-top:.5rem"></span>
       </div>
 
       <div class="field" style="margin-top:1rem">
@@ -180,6 +197,23 @@
       <a href="assumptions.html" style="text-decoration:underline;text-underline-offset:3px">Assumptions</a>
     </p>
   </main>
+</div>
+
+<!-- Offered once a run leaves nothing un-processed and un-lost — see
+     checkCycleFinished() in processing.js. Closing here is the same
+     archive_cycle() that starting a new cycle already uses; this just
+     offers it at the moment it is actually true, instead of only when
+     starting the next flock forces the question. -->
+<div class="sheet" id="closeCycleSheet" hidden>
+  <div class="sheet__scrim" data-close-cycle-sheet></div>
+  <div class="sheet__panel" role="dialog" aria-modal="true" aria-labelledby="closeCycleTitle">
+    <h2 class="title" id="closeCycleTitle">Close out this cycle?</h2>
+    <p class="caption" style="margin-block:.5rem 1.25rem" id="closeCycleWhat"></p>
+    <div class="sheet__actions">
+      <button class="btn btn--glass" type="button" data-close-cycle-sheet data-press>Not yet</button>
+      <button class="btn btn--primary" type="button" id="closeCycleConfirm" data-press>Close the cycle</button>
+    </div>
+  </div>
 </div>
 
 <!-- Delete confirmation -->

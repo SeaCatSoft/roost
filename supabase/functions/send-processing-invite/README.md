@@ -76,7 +76,11 @@ actually receive mail until the domain is verified.
 
 One email per recipient, each with:
 
-- A plain-language line: who booked what, for when, and where.
+- A plain-language line: who booked what, for when, where, and — if the farm
+  said so when booking (021_partial_processing.sql) — how many birds. That
+  count is exactly what was typed into the booking form, nothing this
+  function checks or derives itself; a plan can say 300 and the flock can
+  still send 280 on the day.
 - A `.ics` calendar file attached — the universal format both iOS Mail and
   Android's calendar apps already know how to open. Tapping it offers
   **Add to Calendar** without needing anything else installed.

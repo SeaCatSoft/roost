@@ -84,6 +84,7 @@ interface BookingFacts {
   location: string | null;
   notes: string | null;
   sequence: number;
+  birdsIntended: number | null; // the farm's stated plan, not a live count
 }
 
 // A date-only booking becomes a whole-day event, with no timezone to get
@@ -131,6 +132,7 @@ function buildEvent(f: BookingFacts): string {
   // turns it into the single \n an ICS reader expects. Pre-escaping it first
   // just gets escaped a second time on top.
   const descParts = [`${f.farmName} — ${f.cycleLabel}`];
+  if (f.birdsIntended) descParts.push(`${f.birdsIntended} bird${f.birdsIntended === 1 ? '' : 's'}`);
   if (f.notes) descParts.push(f.notes);
   lines.push(foldLine(`DESCRIPTION:${escapeText(descParts.join('\n\n'))}`));
 
@@ -199,7 +201,7 @@ Deno.serve(async (req) => {
 
   const { data: booking, error: bookingErr } = await userClient
     .from('processing_bookings')
-    .select('id, farm_id, cycle_id, booked_on, booked_time, location, notes, sequence_no')
+    .select('id, farm_id, cycle_id, booked_on, booked_time, location, notes, sequence_no, birds_intended')
     .eq('id', bookingId)
     .maybeSingle();
   if (bookingErr) return json({ error: bookingErr.message }, 400);
@@ -240,6 +242,7 @@ Deno.serve(async (req) => {
     location: booking.location,
     notes: booking.notes,
     sequence: booking.sequence_no,
+    birdsIntended: booking.birds_intended,
   };
 
   const ics = buildCalendar(facts);
@@ -249,13 +252,20 @@ Deno.serve(async (req) => {
     ? `${booking.booked_on} at ${booking.booked_time.slice(0, 5)}`
     : booking.booked_on;
 
+  // Whatever the farm said at booking time, exactly as they said it — this
+  // function has no live bird count of its own to check it against, and
+  // shouldn't invent a claim of accuracy plans do not have.
+  const birdsText = facts.birdsIntended
+    ? ` — ${facts.birdsIntended} bird${facts.birdsIntended === 1 ? '' : 's'}`
+    : '';
+
   let sent = 0;
   let failed = 0;
 
   for (const invite of invites) {
     const html =
       `<p>${facts.farmName} has booked processing for <strong>${facts.cycleLabel}</strong> ` +
-      `on <strong>${whenText}</strong>${facts.location ? ` at ${facts.location}` : ''}.</p>` +
+      `on <strong>${whenText}</strong>${facts.location ? ` at ${facts.location}` : ''}${birdsText}.</p>` +
       (facts.notes ? `<p>${facts.notes.replace(/</g, '&lt;')}</p>` : '') +
       `<p>Open the attached calendar file to add this to your phone's calendar.</p>`;
 

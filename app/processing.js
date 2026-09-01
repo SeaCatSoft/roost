@@ -21,8 +21,9 @@ const showError = (m) => banner($('appError'), $('appErrorText'), m);
 if (!isConfigured) { show('setup'); throw new Error('Supabase is not configured'); }
 
 const state = {
-  cycle: null, lines: [], mix: [], runs: [],
+  cycle: null, lines: [], mix: [], runs: [], progress: null,
   editing: null, outputs: new Map(), pending: null, readOnly: false,
+  birdsScope: 'all',
 
   // Booking a processing day and inviting people to it. isOwner is a
   // stricter gate than readOnly above — a member can record a run on this
@@ -51,11 +52,15 @@ async function boot() {
 
   $('cycleLabel').textContent = state.cycle.label;
 
-  const [lines, mix, runs, actual] = await Promise.all([
+  const [lines, mix, runs, actual, progress] = await Promise.all([
     db.from('product_lines').select('*').order('sort_order'),
     db.from('cycle_product_mix').select('*').eq('cycle_id', state.cycle.id),
     db.from('v_processing_runs').select('*').eq('cycle_id', state.cycle.id).order('processed_on'),
-    db.from('v_cycle_actual').select('*').eq('cycle_id', state.cycle.id).maybeSingle()
+    db.from('v_cycle_actual').select('*').eq('cycle_id', state.cycle.id).maybeSingle(),
+    // birds_processed_total needs migration 021 — fails soft like the others
+    // here, so an older database just never shows the "sent so far" line.
+    db.from('v_cycle_progress').select('birds_alive, birds_processed_total')
+      .eq('cycle_id', state.cycle.id).maybeSingle()
   ]);
 
   if (runs.error) {
@@ -68,9 +73,11 @@ async function boot() {
   state.lines = lines.data || [];
   state.mix = mix.data || [];
   state.runs = runs.data || [];
+  state.progress = progress.data || null;
 
   renderRuns();
   renderCompare(actual.data);
+  renderSentSoFar();
 
   const role = await myRole();
   state.readOnly = !canEdit(role);
@@ -153,6 +160,15 @@ async function fillBookingForm() {
   $('bLocation').value = state.booking?.location ?? '';
   $('bNotes').value = state.booking?.notes ?? '';
 
+  const birdsAlive = Number(state.progress?.birds_alive ?? 0);
+  const intended = state.booking?.birds_intended;
+  // "Some" only when a real, still-relevant plan is on file — a stale
+  // intended count left over from before some birds were already sent
+  // would otherwise reopen as a confusing partial default.
+  const isPartial = intended != null && birdsAlive > 0 && Number(intended) < birdsAlive;
+  setBirdsScope(isPartial ? 'some' : 'all');
+  $('bBirds').value = isPartial ? intended : '';
+
   $('bookingStatus').textContent = state.booking
     ? `${num(state.booking.invites_sent)} of ${num(state.booking.invite_count)} sent` +
       (state.booking.invites_stale ? ` · ${num(state.booking.invites_stale)} need resending` : '')
@@ -212,6 +228,35 @@ function renderRecipients() {
   });
 }
 
+/* ---------- How many birds this booking is for -----------------------------
+   Informational only — stored on the booking (birds_intended) for the email
+   and the conversation with the processor. It changes nothing else on its
+   own; what actually reduces the flock is a run's own birds_processed once
+   it is recorded, since plans can slip and only the real run is trusted for
+   that (021_partial_processing.sql). */
+function setBirdsScope(scope) {
+  state.birdsScope = scope;
+  document.querySelectorAll('[data-segment="birdsScope"] button').forEach((b) =>
+    b.setAttribute('aria-pressed', String(b.getAttribute('data-value') === scope)));
+  $('birdsSomeField').hidden = scope !== 'some';
+
+  const birdsAlive = Number(state.progress?.birds_alive ?? 0);
+  if (scope === 'all') {
+    $('birdsHint').textContent = birdsAlive > 0
+      ? `Sends all ${num(birdsAlive)} still in the house — ${state.cycle.label} will be ready ` +
+        `to close out once it's recorded as processed.`
+      : 'Sends everyone remaining.';
+  } else {
+    $('birdsHint').textContent =
+      'Whatever is left keeps growing after this — recording the actual run afterward is ' +
+      'what really moves the count, this is just what the invite says to expect.';
+  }
+}
+
+document.querySelectorAll('[data-segment="birdsScope"] button').forEach((btn) => {
+  btn.addEventListener('click', () => setBirdsScope(btn.getAttribute('data-value')));
+});
+
 $('addEmailBtn').addEventListener('click', () => {
   const input = $('addEmail');
   const email = input.value.trim().toLowerCase();
@@ -234,6 +279,18 @@ $('saveBookingBtn').addEventListener('click', async () => {
   if (!date) { showError('Pick a processing date.'); return; }
   if (!state.recipients.length) { showError('Add at least one person to invite.'); return; }
 
+  let birdsIntended = null;
+  if (state.birdsScope === 'some') {
+    birdsIntended = parseInt($('bBirds').value, 10);
+    if (!birdsIntended || birdsIntended <= 0) {
+      showError('Say how many birds this booking is for, or switch back to "All of them."');
+      return;
+    }
+  } else {
+    const birdsAlive = Number(state.progress?.birds_alive ?? 0);
+    if (birdsAlive > 0) birdsIntended = birdsAlive;
+  }
+
   btn.disabled = true;
   btn.textContent = 'Saving…';
 
@@ -250,6 +307,7 @@ $('saveBookingBtn').addEventListener('click', async () => {
       booked_time: $('bTime').value || null,
       location: $('bLocation').value.trim() || null,
       notes: $('bNotes').value.trim() || null,
+      birds_intended: birdsIntended,
       created_by: (await db.auth.getSession()).data.session?.user?.id ?? null
     }, { onConflict: 'cycle_id' })
     .select()
@@ -257,7 +315,9 @@ $('saveBookingBtn').addEventListener('click', async () => {
 
   if (saveErr) {
     btn.disabled = false; btn.textContent = 'Save & send invites';
-    showError(saveErr.message);
+    showError(saveErr.message.includes('birds_intended')
+      ? 'This needs migration 021. Run backend/migrations/021_partial_processing.sql in Supabase.'
+      : saveErr.message);
     return;
   }
 
@@ -359,6 +419,20 @@ function renderCompare(a) {
     `Against the modelled cost of ${money(a.cost_modelled)}, this cycle made ` +
     `<strong>${money(profit)}</strong>. Revenue is measured; cost is still modelled ` +
     `from assumptions until purchase records are entered.`;
+}
+
+/* Only worth a line once there is something to report — a cycle finished in
+   one run has nothing this doesn't already say via the runs list below. */
+function renderSentSoFar() {
+  const el = $('sentSoFar');
+  const p = state.progress;
+  if (!p || !Number(p.birds_processed_total)) { el.hidden = true; return; }
+
+  el.hidden = false;
+  el.textContent = Number(p.birds_alive) > 0
+    ? `${num(p.birds_processed_total)} sent to processing so far, ` +
+      `${num(p.birds_alive)} still in the house.`
+    : `${num(p.birds_processed_total)} sent to processing — nothing left in the house.`;
 }
 
 /* ---------- Runs ---------------------------------------------------------- */
@@ -575,6 +649,55 @@ $('saveRunBtn').addEventListener('click', async () => {
   if (error) { showError(error.message); return; }
 
   closeForm();
+  await boot();
+  checkCycleFinished();
+});
+
+/* ---------- Offering to close a finished cycle -----------------------------
+   birds_alive already accounts for both mortality and everything processed
+   so far (021_partial_processing.sql) — once it hits zero, every bird placed
+   is accounted for one way or another, which is exactly what "finished"
+   means here. Offered, never forced: a wrong number entered on the run just
+   saved is still fixable without a cycle closing itself out from under it. */
+function checkCycleFinished() {
+  if (!state.progress || state.cycle.closed_at) return;
+  if (Number(state.progress.birds_alive) > 0) return;
+
+  $('closeCycleWhat').textContent =
+    `${state.cycle.label} has nothing left in the house — every bird placed has been ` +
+    `accounted for, between losses and processing. Closing it out moves it to Batches; ` +
+    `nothing recorded against it is touched.`;
+  $('closeCycleSheet').hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+
+function dismissCloseCycleSheet() {
+  $('closeCycleSheet').hidden = true;
+  document.body.style.overflow = '';
+}
+
+document.querySelectorAll('[data-close-cycle-sheet]').forEach((el) =>
+  el.addEventListener('click', dismissCloseCycleSheet));
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('closeCycleSheet').hidden) dismissCloseCycleSheet();
+});
+
+$('closeCycleConfirm').addEventListener('click', async () => {
+  const btn = $('closeCycleConfirm');
+  btn.disabled = true; btn.textContent = 'Closing…';
+
+  // The same function starting a new cycle already calls to archive the one
+  // it replaces (005_cycle_management.sql) — offered here at the moment it
+  // is actually true, instead of only when starting the next flock forces
+  // the question.
+  const { error } = await db.rpc('archive_cycle', { p_cycle_id: state.cycle.id });
+
+  btn.disabled = false; btn.textContent = 'Close the cycle';
+
+  if (error) { showError(error.message); dismissCloseCycleSheet(); return; }
+
+  dismissCloseCycleSheet();
   await boot();
 });
 

@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Roost — migration audit
 --
--- Not a migration. Checks which of 001-020 have actually been applied, by
+-- Not a migration. Checks which of 001-021 have actually been applied, by
 -- looking for one distinctive object each creates. Run this any time you are
 -- unsure what state the database is in.
 --
@@ -41,6 +41,10 @@ select * from (values
                                         where table_name='farms' and column_name='forecast_opt_in')),
   ('020_processing_bookings',  to_regclass('public.processing_bookings') is not null
                            and to_regclass('public.v_processing_bookings') is not null
-                           and to_regprocedure('public.can_own_booking(bigint)') is not null)
+                           and to_regprocedure('public.can_own_booking(bigint)') is not null),
+  ('021_partial_processing',   exists (select 1 from information_schema.columns
+                                        where table_name='processing_bookings' and column_name='birds_intended')
+                           and exists (select 1 from information_schema.columns
+                                        where table_name='v_cycle_progress' and column_name='birds_processed_total'))
 ) as t(migration, applied)
 order by migration;

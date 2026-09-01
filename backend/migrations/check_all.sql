@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Roost — migration audit
 --
--- Not a migration. Checks which of 001-021 have actually been applied, by
+-- Not a migration. Checks which of 001-022 have actually been applied, by
 -- looking for one distinctive object each creates. Run this any time you are
 -- unsure what state the database is in.
 --
@@ -45,6 +45,11 @@ select * from (values
   ('021_partial_processing',   exists (select 1 from information_schema.columns
                                         where table_name='processing_bookings' and column_name='birds_intended')
                            and exists (select 1 from information_schema.columns
-                                        where table_name='v_cycle_progress' and column_name='birds_processed_total'))
+                                        where table_name='v_cycle_progress' and column_name='birds_processed_total')),
+  -- No new column or function — this migration only tightens a WHERE clause
+  -- inside an existing view, so the check reads the view's own SQL text
+  -- rather than checking for an object that would exist either way.
+  ('022_processing_effective_date',
+     pg_get_viewdef('public.v_cycle_progress'::regclass) like '%processed_on <= current_date%')
 ) as t(migration, applied)
 order by migration;

@@ -496,6 +496,7 @@ async function openForm(run) {
 
   $('formTitle').textContent = run ? 'Edit run' : 'Record a run';
   $('fDate').value = run ? run.processed_on : today();
+  updateFutureDateHint();
   $('fBirds').value = run ? run.birds_processed : '';
   $('fCondemned').value = run ? run.birds_condemned : 0;
   $('fLive').value = run?.live_weight_lb ?? '';
@@ -516,6 +517,24 @@ async function openForm(run) {
   $('formPanel').hidden = false;
   $('formPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+/* A run dated ahead of today does not count toward birds_alive until that
+   date arrives (022_processing_effective_date.sql) — worth saying here
+   rather than leaving someone to notice the flock count didn't move and
+   wonder if the save even worked. */
+function updateFutureDateHint() {
+  const hint = $('futureDateHint');
+  const val = $('fDate').value;
+  if (val && val > today()) {
+    hint.hidden = false;
+    hint.textContent =
+      `Dated ahead of today — this won't reduce the flock count until ${val} arrives.`;
+  } else {
+    hint.hidden = true;
+  }
+}
+
+$('fDate').addEventListener('change', updateFutureDateHint);
 
 function closeForm() {
   $('formPanel').hidden = true;

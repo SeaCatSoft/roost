@@ -676,7 +676,8 @@ body { background: var(--page); }
 }
 @media (min-width: 520px) { .tiles { grid-template-columns: repeat(4, 1fr); } }
 .tile {
-  display: grid; justify-items: center; gap: .5rem;
+  display: grid; justify-items: center; align-content: center; gap: .5rem;
+  min-height: 110px; /* room for a badge, so one tile growing does not throw off its row */
   padding: 1.1rem .6rem;
   background: var(--page-2); border-radius: var(--r-md);
   box-shadow: var(--shadow-1);
@@ -686,6 +687,16 @@ body { background: var(--page); }
 .tile:hover { box-shadow: var(--shadow-2); }
 .tile.is-pressed { transform: scale(.97); }
 .tile svg { width: 22px; height: 22px; color: var(--accent); }
+
+/* A tile can carry one small fact beneath its label — currently only a
+   booked processing date, but written generically since any tile might
+   earn one later. Hidden rather than absent when there is nothing to show,
+   so the tile's height never shifts between having one and not. */
+.tile__badge {
+  font-size: .65rem; font-weight: 600; line-height: 1;
+  padding: .2rem .55rem; border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent);
+}
 
 /* ---------- Processing ---------- */
 .cmp2 {

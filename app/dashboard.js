@@ -12,7 +12,7 @@
 
 import {
   db, isConfigured, $, today, daysBetween, banner, loadOpenCycle,
-  myRole, standardWeightAt as standardAt
+  myRole, standardWeightAt as standardAt, formatShortDate
 } from './db.js';
 
 const screens = { setup: $('setupScreen'), auth: $('authScreen'), app: $('appScreen') };
@@ -232,7 +232,7 @@ async function boot() {
   renderLifeBar(day, cycle.target_sale_age);
 
   const [progress, todayRows, samples, bags, assumptions, plan, pnl,
-         feedForecast, mortForecast, dailyChecks] = await Promise.all([
+         feedForecast, mortForecast, dailyChecks, booking] = await Promise.all([
     db.from('v_cycle_progress').select('*').eq('cycle_id', cycle.id).maybeSingle(),
     db.from('daily_checks').select('session').eq('cycle_id', cycle.id).eq('day_number', day),
     db.from('sample_weights').select('day_number, avg_weight_g')
@@ -256,11 +256,16 @@ async function boot() {
     // every day up to today, not just today's, which is all the today-card
     // query above asks for.
     db.from('daily_checks').select('day_number, mortality, culls')
-      .eq('cycle_id', cycle.id).lte('day_number', day)
+      .eq('cycle_id', cycle.id).lte('day_number', day),
+    // One row per cycle (020_processing_bookings.sql) — older databases
+    // simply have no such view, so this fails soft like the others above.
+    db.from('v_processing_bookings').select('booked_on, booked_time, is_past')
+      .eq('cycle_id', cycle.id).maybeSingle()
   ]);
 
   renderToday(day, todayRows.data || [], todayRows.error);
   renderFlock(progress.data, cycle);
+  renderProcessingBadge(booking.data);
   renderFcr({
     cycle, day,
     samples: samples.data || [],
@@ -378,6 +383,18 @@ function renderFlock(progress, cycle) {
   const day = Math.max(1, daysBetween(cycle.placed_on, today()) + 1);
   const phase = day <= 14 ? 'Starter' : day <= 28 ? 'Grower' : 'Finisher';
   $('phasePill').textContent = phase;
+}
+
+/* ---------- Processing, on the tile itself --------------------------------
+   A booked date changes what "today" means for feed and health decisions —
+   worth seeing from the menu, before opening the screen to find out. A past
+   booking says nothing here; once it has happened this is just a tile again,
+   the same way a closed cycle's badge would be noise, not information. */
+function renderProcessingBadge(booking) {
+  const badge = $('processingBadge');
+  if (!booking || booking.is_past) { badge.hidden = true; return; }
+  badge.textContent = formatShortDate(booking.booked_on);
+  badge.hidden = false;
 }
 
 /* ---------- Feed conversion ----------------------------------------------- */

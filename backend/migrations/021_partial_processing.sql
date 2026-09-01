@@ -72,12 +72,17 @@ select
        then coalesce(l.cumulative_losses, 0)::numeric / c.birds_placed
   end                                                 as mortality_to_date,
 
+  coalesce(b.bags_opened, 0)                          as bags_opened,
+  c.closed_at,
+
+  -- Appended at the end, not inserted among the columns above: Postgres
+  -- only allows CREATE OR REPLACE VIEW to add columns after every existing
+  -- one — inserting a new column in the middle reads as dropping and
+  -- reordering the columns after it, which it refuses outright.
+  --
   -- Named separately from birds_alive so a screen can say "420 sent so far"
   -- rather than leaving that fact implied by subtraction.
-  coalesce(p.birds_processed_total, 0)                as birds_processed_total,
-
-  coalesce(b.bags_opened, 0)                          as bags_opened,
-  c.closed_at
+  coalesce(p.birds_processed_total, 0)                as birds_processed_total
 from cycles c
 left join lateral (
   select birds_alive, cumulative_losses
@@ -187,14 +192,16 @@ select
   b.booked_time,
   b.location,
   b.notes,
-  b.birds_intended,
   b.updated_at,
   b.sequence_no,
   coalesce(i.total, 0)  as invite_count,
   coalesce(i.sent, 0)   as invites_sent,
   coalesce(i.stale, 0)  as invites_stale,
   coalesce(i.failed, 0) as invites_failed,
-  (current_date > b.booked_on)             as is_past
+  (current_date > b.booked_on)             as is_past,
+  -- Appended at the end for the same reason as v_cycle_progress above —
+  -- CREATE OR REPLACE VIEW cannot insert a column ahead of existing ones.
+  b.birds_intended
 from processing_bookings b
 join cycles c on c.id = b.cycle_id
 left join lateral (

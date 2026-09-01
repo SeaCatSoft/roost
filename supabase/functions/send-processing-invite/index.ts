@@ -272,9 +272,13 @@ Deno.serve(async (req) => {
           to: invite.email,
           subject: `Processing day booked — ${whenText}`,
           html,
+          // Explicit, not inferred from the filename: some mail apps only
+          // offer "Add to Calendar" when the attachment is actually labelled
+          // as a calendar object, rather than guessed from a .ics extension.
           attachments: [{
             filename: 'processing-day.ics',
             content: icsBase64,
+            content_type: 'text/calendar; method=PUBLISH; charset=UTF-8',
           }],
         }),
       });

@@ -47,6 +47,12 @@ alter table processing_bookings
 
 
 -- ---------- birds_alive now accounts for processing, not only mortality -------
+-- Based on the version actually live since 010_twice_daily_checks.sql, not
+-- the original in 002_views.sql — 010 rebuilt this view (drop+recreate, not
+-- replace, since it needed to reorder daily_checks' own columns) and added
+-- days_recorded/days_complete along the way. An earlier draft of this
+-- migration was written against the pre-010 shape and silently dropped both
+-- columns, which is exactly the "cannot drop columns from view" this fixes.
 create or replace view v_cycle_progress with (security_invoker = true) as
 select
   c.id                as cycle_id,
@@ -55,7 +61,7 @@ select
   c.placed_on,
   c.birds_placed,
   c.target_sale_age,
-  (current_date - c.placed_on)                        as age_days,
+  (current_date - c.placed_on)                                 as age_days,
   greatest(c.target_sale_age - (current_date - c.placed_on), 0) as days_remaining,
 
   -- Still in the house: not dead, and not already on a truck to the plant
@@ -65,14 +71,16 @@ select
   greatest(
     coalesce(l.birds_alive, c.birds_placed) - coalesce(p.birds_processed_total, 0),
     0
-  )                                                   as birds_alive,
+  )                                                            as birds_alive,
 
-  coalesce(l.cumulative_losses, 0)                    as losses,
+  coalesce(l.cumulative_losses, 0)                             as losses,
   case when c.birds_placed > 0
        then coalesce(l.cumulative_losses, 0)::numeric / c.birds_placed
-  end                                                 as mortality_to_date,
+  end                                                          as mortality_to_date,
 
-  coalesce(b.bags_opened, 0)                          as bags_opened,
+  coalesce(b.bags_opened, 0)                                   as bags_opened,
+  coalesce(t.days_recorded, 0)                                 as days_recorded,
+  coalesce(t.days_complete, 0)                                 as days_complete,
   c.closed_at,
 
   -- Appended at the end, not inserted among the columns above: Postgres
@@ -82,20 +90,23 @@ select
   --
   -- Named separately from birds_alive so a screen can say "420 sent so far"
   -- rather than leaving that fact implied by subtraction.
-  coalesce(p.birds_processed_total, 0)                as birds_processed_total
+  coalesce(p.birds_processed_total, 0)                         as birds_processed_total
 from cycles c
 left join lateral (
   select birds_alive, cumulative_losses
   from v_daily_flock f
   where f.cycle_id = c.id
-  order by f.day_number desc
+  order by f.day_number desc, session_rank(f.session) desc
   limit 1
 ) l on true
 left join lateral (
-  select count(*) as bags_opened
-  from feed_bag_openings o
-  where o.cycle_id = c.id
+  select count(*) as bags_opened from feed_bag_openings o where o.cycle_id = c.id
 ) b on true
+left join lateral (
+  select count(*) as days_recorded,
+         count(*) filter (where complete) as days_complete
+  from v_daily_totals dt where dt.cycle_id = c.id
+) t on true
 left join lateral (
   select sum(birds_processed) as birds_processed_total
   from processing_runs r
@@ -107,6 +118,14 @@ left join lateral (
 -- A closed, fully-processed cycle should show nothing "remaining" in the
 -- batch history — the birds were sold, not lost, and showing them as still
 -- alive there is exactly as misleading as it would be on the live dashboard.
+--
+-- The ck join below is copied from the version actually live since
+-- 010_twice_daily_checks.sql, not 006_cycle_history.sql's original — 010
+-- moved "days recorded" and "losses" onto v_daily_totals so a day with both
+-- an AM and a PM check counts as one day, not two. Building this against
+-- 006 instead would have silently undone that the moment this ran, without
+-- Postgres having any reason to complain — column names and order stayed
+-- the same, only the count underneath them would have quietly reverted.
 create or replace view v_cycle_summary with (security_invoker = true) as
 select
   c.id                as cycle_id,
@@ -161,9 +180,8 @@ select
 from cycles c
 left join cycle_assumptions a on a.cycle_id = c.id
 left join lateral (
-  select count(*) as days_recorded,
-         sum(mortality + culls) as losses
-  from daily_checks d where d.cycle_id = c.id
+  select count(*) as days_recorded, coalesce(sum(losses), 0) as losses
+  from v_daily_totals dt where dt.cycle_id = c.id
 ) ck on true
 left join lateral (
   select count(*) as bags_opened

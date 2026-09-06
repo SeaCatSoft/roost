@@ -117,11 +117,18 @@ async function loadBooking() {
 
   state.booking = booking || null;
 
-  if (state.booking) {
+  // A cancelled booking is done — the cancellation notice has already gone
+  // out, and there is nothing left for this screen to keep saying about it.
+  // Everywhere below treats it exactly like no booking at all, so the recipient
+  // list starts fresh from the current farm members too, rather than showing
+  // who used to be invited to something that no longer exists.
+  const active = state.booking && !state.booking.is_cancelled ? state.booking : null;
+
+  if (active) {
     const { data: invites } = await db
       .from('processing_booking_invites')
       .select('id, email, name, sent_at, sent_for_seq, error')
-      .eq('booking_id', state.booking.id)
+      .eq('booking_id', active.id)
       .order('id');
     state.recipients = (invites || []).map((i) => ({ ...i }));
   } else {
@@ -141,19 +148,13 @@ function renderBookingBanner() {
   const banner = $('bookingBanner');
 
   // Owners get the full editor below instead — showing both says the same
-  // thing twice.
-  if (state.isOwner || !b) { banner.hidden = true; return; }
+  // thing twice. A cancelled booking is treated the same as no booking at
+  // all: the cancellation notice already went out by email, and this screen
+  // has nothing left to keep saying about it afterward.
+  if (state.isOwner || !b || b.is_cancelled) { banner.hidden = true; return; }
 
   const when = b.booked_time ? `${shortDate(b.booked_on)} at ${b.booked_time.slice(0, 5)}` : shortDate(b.booked_on);
   banner.hidden = false;
-
-  if (b.is_cancelled) {
-    banner.className = 'banner banner--warn';
-    $('bookingBannerText').innerHTML =
-      `Processing previously booked for <strong>${when}</strong> was <strong>cancelled</strong>. ` +
-      `No processing day is currently scheduled.`;
-    return;
-  }
   banner.className = 'banner banner--ok';
   $('bookingBannerText').innerHTML =
     `Processing booked for <strong>${when}</strong>${b.location ? ` at ${b.location}` : ''}.` +
@@ -162,15 +163,22 @@ function renderBookingBanner() {
 
 /* Farm members are offered by default — a booking with nobody on it is
    rarely what was meant — and anyone already invited stays listed even if
-   they have since left the farm, since the invite was already sent. */
+   they have since left the farm, since the invite was already sent.
+
+   A cancelled booking behaves exactly like no booking here: the form comes
+   back blank rather than showing what used to be booked. The cancellation
+   notice already went out by email when it was cancelled — this screen has
+   said its piece and does not need to keep saying it after every refresh. */
 async function fillBookingForm() {
-  $('bDate').value = state.booking ? state.booking.booked_on : '';
-  $('bTime').value = state.booking?.booked_time ? state.booking.booked_time.slice(0, 5) : '';
-  $('bLocation').value = state.booking?.location ?? '';
-  $('bNotes').value = state.booking?.notes ?? '';
+  const active = state.booking && !state.booking.is_cancelled ? state.booking : null;
+
+  $('bDate').value = active ? active.booked_on : '';
+  $('bTime').value = active?.booked_time ? active.booked_time.slice(0, 5) : '';
+  $('bLocation').value = active?.location ?? '';
+  $('bNotes').value = active?.notes ?? '';
 
   const birdsAlive = Number(state.progress?.birds_alive ?? 0);
-  const intended = state.booking?.birds_intended;
+  const intended = active?.birds_intended;
   // "Some" only when a real, still-relevant plan is on file — a stale
   // intended count left over from before some birds were already sent
   // would otherwise reopen as a confusing partial default.
@@ -178,25 +186,12 @@ async function fillBookingForm() {
   setBirdsScope(isPartial ? 'some' : 'all');
   $('bBirds').value = isPartial ? intended : '';
 
-  $('bookingStatus').textContent = state.booking
-    ? (state.booking.is_cancelled
-        ? 'Cancelled'
-        : `${num(state.booking.invites_sent)} of ${num(state.booking.invite_count)} sent` +
-          (state.booking.invites_stale ? ` · ${num(state.booking.invites_stale)} need resending` : ''))
+  $('bookingStatus').textContent = active
+    ? `${num(active.invites_sent)} of ${num(active.invite_count)} sent` +
+      (active.invites_stale ? ` · ${num(active.invites_stale)} need resending` : '')
     : 'Not booked yet';
 
-  // Only an active booking has anything to cancel; only a cancelled one
-  // needs telling — everything else about the form (fields, recipients,
-  // Save) works exactly the same whether this is a first booking or a
-  // reactivation of one just cancelled.
-  const isCancelled = !!state.booking?.is_cancelled;
-  $('cancelBookingBtn').hidden = !state.booking || isCancelled;
-  $('cancelledNotice').hidden = !isCancelled;
-  if (isCancelled) {
-    $('cancelledNoticeText').textContent =
-      `This booking was cancelled. The fields below still hold what was booked — ` +
-      `change the date and save to book a new one, or start fresh.`;
-  }
+  $('cancelBookingBtn').hidden = !active;
 
   // Merged in every time, not only when the list starts empty — someone who
   // joins the farm after the first booking should still show up as a

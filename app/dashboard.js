@@ -259,7 +259,7 @@ async function boot() {
       .eq('cycle_id', cycle.id).lte('day_number', day),
     // One row per cycle (020_processing_bookings.sql) — older databases
     // simply have no such view, so this fails soft like the others above.
-    db.from('v_processing_bookings').select('booked_on, booked_time, is_past')
+    db.from('v_processing_bookings').select('booked_on, booked_time, is_past, is_cancelled')
       .eq('cycle_id', cycle.id).maybeSingle()
   ]);
 
@@ -392,7 +392,7 @@ function renderFlock(progress, cycle) {
    the same way a closed cycle's badge would be noise, not information. */
 function renderProcessingBadge(booking) {
   const badge = $('processingBadge');
-  if (!booking || booking.is_past) { badge.hidden = true; return; }
+  if (!booking || booking.is_past || booking.is_cancelled) { badge.hidden = true; return; }
   badge.textContent = formatShortDate(booking.booked_on);
   badge.hidden = false;
 }

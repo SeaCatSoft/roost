@@ -75,6 +75,14 @@
         own phone — no reply expected, just a date on the calendar.
       </p>
 
+      <!-- Shown only once cancel_booking has actually cancelled the current
+           booking. The form below still works from here — saving a new date
+           reactivates this same booking rather than needing a separate one. -->
+      <div id="cancelledNotice" class="banner banner--warn" hidden style="text-align:left;margin-bottom:1.25rem">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 8.5v5M12 17h.01"/><circle cx="12" cy="12" r="9.5"/></svg>
+        <div id="cancelledNoticeText"></div>
+      </div>
+
       <div class="setting-grid">
         <label class="setting">
           <span class="setting__label">Date</span>
@@ -119,6 +127,7 @@
       </div>
 
       <div class="sheet__actions" style="margin-top:1.25rem">
+        <button class="btn btn--danger" type="button" id="cancelBookingBtn" data-press hidden>Cancel booking</button>
         <button class="btn btn--primary" type="button" id="saveBookingBtn" data-press>Save & send invites</button>
       </div>
 
@@ -198,6 +207,22 @@
       <a href="assumptions.html" style="text-decoration:underline;text-underline-offset:3px">Assumptions</a>
     </p>
   </main>
+</div>
+
+<!-- Cancelling marks the booking, then sends a proper cancellation to
+     everyone who was already invited — the same calendar UID at a bumped
+     sequence, STATUS:CANCELLED, so it actually disappears from their phone
+     rather than being quietly forgotten only on Roost's side. -->
+<div class="sheet" id="cancelBookingSheet" hidden>
+  <div class="sheet__scrim" data-close-cancel-sheet></div>
+  <div class="sheet__panel" role="dialog" aria-modal="true" aria-labelledby="cancelBookingTitle">
+    <h2 class="title" id="cancelBookingTitle">Cancel this booking?</h2>
+    <p class="caption" style="margin-block:.5rem 1.25rem" id="cancelBookingWhat"></p>
+    <div class="sheet__actions">
+      <button class="btn btn--glass" type="button" data-close-cancel-sheet data-press>Keep it</button>
+      <button class="btn btn--danger" type="button" id="cancelBookingConfirm" data-press>Cancel booking</button>
+    </div>
+  </div>
 </div>
 
 <!-- Offered once a run leaves nothing un-processed and un-lost — see

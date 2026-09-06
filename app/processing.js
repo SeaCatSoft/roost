@@ -146,6 +146,15 @@ function renderBookingBanner() {
 
   const when = b.booked_time ? `${shortDate(b.booked_on)} at ${b.booked_time.slice(0, 5)}` : shortDate(b.booked_on);
   banner.hidden = false;
+
+  if (b.is_cancelled) {
+    banner.className = 'banner banner--warn';
+    $('bookingBannerText').innerHTML =
+      `Processing previously booked for <strong>${when}</strong> was <strong>cancelled</strong>. ` +
+      `No processing day is currently scheduled.`;
+    return;
+  }
+  banner.className = 'banner banner--ok';
   $('bookingBannerText').innerHTML =
     `Processing booked for <strong>${when}</strong>${b.location ? ` at ${b.location}` : ''}.` +
     (b.is_past ? ' <span class="caption">(this date has passed)</span>' : '');
@@ -170,9 +179,24 @@ async function fillBookingForm() {
   $('bBirds').value = isPartial ? intended : '';
 
   $('bookingStatus').textContent = state.booking
-    ? `${num(state.booking.invites_sent)} of ${num(state.booking.invite_count)} sent` +
-      (state.booking.invites_stale ? ` · ${num(state.booking.invites_stale)} need resending` : '')
+    ? (state.booking.is_cancelled
+        ? 'Cancelled'
+        : `${num(state.booking.invites_sent)} of ${num(state.booking.invite_count)} sent` +
+          (state.booking.invites_stale ? ` · ${num(state.booking.invites_stale)} need resending` : ''))
     : 'Not booked yet';
+
+  // Only an active booking has anything to cancel; only a cancelled one
+  // needs telling — everything else about the form (fields, recipients,
+  // Save) works exactly the same whether this is a first booking or a
+  // reactivation of one just cancelled.
+  const isCancelled = !!state.booking?.is_cancelled;
+  $('cancelBookingBtn').hidden = !state.booking || isCancelled;
+  $('cancelledNotice').hidden = !isCancelled;
+  if (isCancelled) {
+    $('cancelledNoticeText').textContent =
+      `This booking was cancelled. The fields below still hold what was booked — ` +
+      `change the date and save to book a new one, or start fresh.`;
+  }
 
   // Merged in every time, not only when the list starts empty — someone who
   // joins the farm after the first booking should still show up as a
@@ -295,9 +319,14 @@ $('saveBookingBtn').addEventListener('click', async () => {
   btn.textContent = 'Saving…';
 
   // One booking per cycle: created the first time, updated every time after.
-  // The trigger behind this (018) only advances the calendar SEQUENCE when
-  // the date, time or location actually changes — editing just the notes
-  // does not force everyone's calendar to re-confirm.
+  // The trigger behind this (018, extended in 023) only advances the
+  // calendar SEQUENCE when the date, time, location or cancelled state
+  // actually changes — editing just the notes does not force everyone's
+  // calendar to re-confirm.
+  //
+  // cancelled_at: null on every save, deliberately — saving here from a
+  // cancelled booking is exactly how a fresh date gets booked again for the
+  // same cycle, and this is what reactivates it.
   const { data: saved, error: saveErr } = await db
     .from('processing_bookings')
     .upsert({
@@ -308,6 +337,7 @@ $('saveBookingBtn').addEventListener('click', async () => {
       location: $('bLocation').value.trim() || null,
       notes: $('bNotes').value.trim() || null,
       birds_intended: birdsIntended,
+      cancelled_at: null,
       created_by: (await db.auth.getSession()).data.session?.user?.id ?? null
     }, { onConflict: 'cycle_id' })
     .select()
@@ -670,6 +700,72 @@ $('saveRunBtn').addEventListener('click', async () => {
   closeForm();
   await boot();
   checkCycleFinished();
+});
+
+/* ---------- Cancelling a booking -------------------------------------------
+   Two steps, always both: mark the booking cancelled (the trigger bumps its
+   SEQUENCE for the same reason a reschedule does), then ask the function to
+   send that cancellation to everyone who was actually sent something —
+   otherwise Roost would consider it cancelled while their phones still show
+   the old date. */
+$('cancelBookingBtn').addEventListener('click', () => {
+  if (!state.booking) return;
+  const when = state.booking.booked_time
+    ? `${shortDate(state.booking.booked_on)} at ${state.booking.booked_time.slice(0, 5)}`
+    : shortDate(state.booking.booked_on);
+  $('cancelBookingWhat').textContent =
+    `Booked for ${when}. Anyone already sent an invite gets a cancellation for it — ` +
+    `their calendar should drop the event automatically.`;
+  $('cancelBookingSheet').hidden = false;
+  document.body.style.overflow = 'hidden';
+});
+
+function dismissCancelSheet() {
+  $('cancelBookingSheet').hidden = true;
+  document.body.style.overflow = '';
+}
+
+document.querySelectorAll('[data-close-cancel-sheet]').forEach((el) =>
+  el.addEventListener('click', dismissCancelSheet));
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('cancelBookingSheet').hidden) dismissCancelSheet();
+});
+
+$('cancelBookingConfirm').addEventListener('click', async () => {
+  if (!state.booking) return;
+  const btn = $('cancelBookingConfirm');
+  btn.disabled = true; btn.textContent = 'Cancelling…';
+  showError(null);
+
+  const { error: cancelErr } = await db
+    .from('processing_bookings')
+    .update({ cancelled_at: new Date().toISOString() })
+    .eq('id', state.booking.id);
+
+  if (cancelErr) {
+    btn.disabled = false; btn.textContent = 'Cancel booking';
+    dismissCancelSheet();
+    showError(cancelErr.message);
+    return;
+  }
+
+  const { data, error: sendErr } = await db.functions.invoke('send-processing-invite', {
+    body: { booking_id: state.booking.id, cancel: true }
+  });
+
+  btn.disabled = false; btn.textContent = 'Cancel booking';
+  dismissCancelSheet();
+
+  if (sendErr) {
+    showError(`Booking cancelled, but the cancellation notice failed to send: ${await readFunctionError(sendErr)}`);
+  } else if (data?.sent) {
+    $('inviteResult').innerHTML =
+      `<p class="caption" style="margin-top:.75rem">Booking cancelled. Notified ${num(data.sent)} ` +
+      `${data.sent === 1 ? 'person' : 'people'}${data.failed ? `, ${num(data.failed)} failed` : ''}.</p>`;
+  }
+
+  await loadBooking();
 });
 
 /* ---------- Offering to close a finished cycle -----------------------------

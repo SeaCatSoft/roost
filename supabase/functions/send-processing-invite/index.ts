@@ -85,6 +85,7 @@ interface BookingFacts {
   notes: string | null;
   sequence: number;
   birdsIntended: number | null; // the farm's stated plan, not a live count
+  cancelled: boolean;
 }
 
 // A date-only booking becomes a whole-day event, with no timezone to get
@@ -97,14 +98,21 @@ interface BookingFacts {
 function buildEvent(f: BookingFacts): string {
   const [y, mo, d] = f.bookedOn.split('-').map(Number);
   const uid = `processing-booking-${f.bookingId}@roost.app`;
-  const summary = `Processing day — ${f.cycleLabel}`;
+  // The prefix is redundant with STATUS:CANCELLED below on calendar apps
+  // that render it — kept anyway for the ones that don't, and for the
+  // plain-text fallback some mail clients show before rendering the invite.
+  const summary = `${f.cancelled ? 'Cancelled: ' : ''}Processing day — ${f.cycleLabel}`;
 
   const lines: string[] = [];
   lines.push('BEGIN:VEVENT');
   lines.push(`UID:${uid}`);
   lines.push(`DTSTAMP:${fmtDateStamp(new Date())}`);
   lines.push(`SEQUENCE:${f.sequence}`);
-  lines.push('STATUS:CONFIRMED');
+  // Still PUBLISH at the calendar level (see the file header) — cancelling a
+  // published event is STATUS:CANCELLED on the same UID at a higher
+  // SEQUENCE, not a switch to the REQUEST/CANCEL method pair meant for
+  // negotiated meetings.
+  lines.push(f.cancelled ? 'STATUS:CANCELLED' : 'STATUS:CONFIRMED');
 
   if (f.bookedTime) {
     const [hh, mm, ss] = f.bookedTime.split(':').map(Number);
@@ -159,7 +167,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
 
-  let body: { booking_id?: number; emails?: string[] };
+  let body: { booking_id?: number; emails?: string[]; cancel?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -168,6 +176,7 @@ Deno.serve(async (req) => {
 
   const bookingId = body.booking_id;
   if (!bookingId) return json({ error: 'booking_id is required' }, 400);
+  const isCancel = body.cancel === true;
 
   const authHeader = req.headers.get('Authorization');
   if (!authHeader) return json({ error: 'Not signed in' }, 401);
@@ -201,36 +210,58 @@ Deno.serve(async (req) => {
 
   const { data: booking, error: bookingErr } = await userClient
     .from('processing_bookings')
-    .select('id, farm_id, cycle_id, booked_on, booked_time, location, notes, sequence_no, birds_intended')
+    .select('id, farm_id, cycle_id, booked_on, booked_time, location, notes, sequence_no, birds_intended, cancelled_at')
     .eq('id', bookingId)
     .maybeSingle();
   if (bookingErr) return json({ error: bookingErr.message }, 400);
   if (!booking) return json({ error: 'That booking does not exist, or you do not have access to it' }, 404);
+
+  // This function never sets cancelled_at itself — the app already writes
+  // it directly (the same way it already writes every other booking field),
+  // same as it always has. This only refuses to send a *normal* invite for
+  // a booking that was never actually reactivated with a fresh date.
+  if (isCancel && !booking.cancelled_at) {
+    return json({ error: 'This booking is not marked cancelled — nothing to send a cancellation for.' }, 400);
+  }
+  if (!isCancel && booking.cancelled_at) {
+    return json({ error: 'This booking is cancelled. Save a new date before sending invites.' }, 400);
+  }
 
   const [{ data: farm }, { data: cycle }] = await Promise.all([
     userClient.from('farms').select('name').eq('id', booking.farm_id).maybeSingle(),
     userClient.from('cycles').select('label').eq('id', booking.cycle_id).maybeSingle(),
   ]);
 
-  // Which invites to (re)send: the ones named explicitly, or — left
-  // unspecified — everything not already sent for this exact booking
-  // sequence, which naturally covers both brand-new recipients and anyone
-  // left stale by a reschedule.
   let query = userClient
     .from('processing_booking_invites')
     .select('id, email, name')
     .eq('booking_id', bookingId);
 
-  if (body.emails && body.emails.length) {
+  if (isCancel) {
+    // Everyone who ever actually received something — not only whoever is
+    // current for this sequence. A person on an older, stale invite still
+    // has an event sitting on their calendar that needs cancelling; which
+    // exact sequence they last received does not change that.
+    query = query.not('sent_at', 'is', null);
+  } else if (body.emails && body.emails.length) {
     query = query.in('email', body.emails);
   } else {
+    // Which invites to (re)send: the ones named explicitly, or — left
+    // unspecified — everything not already sent for this exact booking
+    // sequence, which naturally covers both brand-new recipients and anyone
+    // left stale by a reschedule.
     query = query.or(`sent_at.is.null,sent_for_seq.neq.${booking.sequence_no}`);
   }
 
   const { data: invites, error: invitesErr } = await query;
   if (invitesErr) return json({ error: invitesErr.message }, 400);
   if (!invites || !invites.length) {
-    return json({ ok: true, sent: 0, failed: 0, message: 'Nothing to send — everyone is already invited.' });
+    return json({
+      ok: true, sent: 0, failed: 0,
+      message: isCancel
+        ? 'Nobody had actually been sent an invite for this booking, so there is nothing to cancel by email.'
+        : 'Nothing to send — everyone is already invited.',
+    });
   }
 
   const facts: BookingFacts = {
@@ -243,6 +274,7 @@ Deno.serve(async (req) => {
     notes: booking.notes,
     sequence: booking.sequence_no,
     birdsIntended: booking.birds_intended,
+    cancelled: isCancel,
   };
 
   const ics = buildCalendar(facts);
@@ -262,13 +294,21 @@ Deno.serve(async (req) => {
   let sent = 0;
   let failed = 0;
 
-  for (const invite of invites) {
-    const html =
-      `<p>${facts.farmName} has booked processing for <strong>${facts.cycleLabel}</strong> ` +
+  const html = isCancel
+    ? `<p>${facts.farmName} has <strong>cancelled</strong> processing for <strong>${facts.cycleLabel}</strong>, ` +
+      `previously booked for ${whenText}${facts.location ? ` at ${facts.location}` : ''}.</p>` +
+      `<p>The attached file should remove it from your calendar automatically. If it doesn't, the event is safe ` +
+      `to delete by hand — this is not a new date to add, only the old one going away.</p>`
+    : `<p>${facts.farmName} has booked processing for <strong>${facts.cycleLabel}</strong> ` +
       `on <strong>${whenText}</strong>${facts.location ? ` at ${facts.location}` : ''}${birdsText}.</p>` +
       (facts.notes ? `<p>${facts.notes.replace(/</g, '&lt;')}</p>` : '') +
       `<p>Open the attached calendar file to add this to your phone's calendar.</p>`;
 
+  const subject = isCancel
+    ? `Processing day cancelled — was ${whenText}`
+    : `Processing day booked — ${whenText}`;
+
+  for (const invite of invites) {
     let sendError: string | null = null;
     try {
       const res = await fetch('https://api.resend.com/emails', {
@@ -280,7 +320,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           from: FROM_ADDRESS,
           to: invite.email,
-          subject: `Processing day booked — ${whenText}`,
+          subject,
           html,
           // Explicit, not inferred from the filename: some mail apps only
           // offer "Add to Calendar" when the attachment is actually labelled

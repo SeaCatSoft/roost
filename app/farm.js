@@ -203,7 +203,7 @@ function renderUnsent(rows) {
    right answer until the run itself is recorded. */
 function renderBookingNote(booking) {
   const el = $('bookingNote');
-  if (!booking || booking.is_past) { el.hidden = true; return; }
+  if (!booking || booking.is_past || booking.is_cancelled) { el.hidden = true; return; }
   el.textContent = `Processing booked for ${shortDate(booking.booked_on)}.`;
   el.hidden = false;
 }
@@ -214,7 +214,7 @@ async function renderActual() {
     db.from('v_cycle_actual').select('*').eq('cycle_id', state.cycle.id).maybeSingle(),
     // One row per cycle (020_processing_bookings.sql) — older databases
     // have no such view, so this fails soft rather than blocking the panel.
-    db.from('v_processing_bookings').select('booked_on, is_past')
+    db.from('v_processing_bookings').select('booked_on, is_past, is_cancelled')
       .eq('cycle_id', state.cycle.id).maybeSingle()
   ]);
 

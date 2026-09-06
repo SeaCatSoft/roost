@@ -257,10 +257,14 @@ async function boot() {
     // query above asks for.
     db.from('daily_checks').select('day_number, mortality, culls')
       .eq('cycle_id', cycle.id).lte('day_number', day),
-    // One row per cycle (020_processing_bookings.sql) — older databases
-    // simply have no such view, so this fails soft like the others above.
+    // A cycle can hold more than one booking (025_multiple_bookings.sql) —
+    // the tile only has room to name one, so this asks for the soonest
+    // upcoming rather than fetching all of them to filter client-side.
+    // Older databases simply have no such view, so this fails soft like the
+    // others above.
     db.from('v_processing_bookings').select('booked_on, booked_time, is_past, is_cancelled')
-      .eq('cycle_id', cycle.id).maybeSingle()
+      .eq('cycle_id', cycle.id).eq('is_cancelled', false).eq('is_past', false)
+      .order('booked_on').limit(1).maybeSingle()
   ]);
 
   renderToday(day, todayRows.data || [], todayRows.error);

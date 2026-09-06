@@ -22,14 +22,19 @@ if (!isConfigured) { show('setup'); throw new Error('Supabase is not configured'
 
 const state = {
   cycle: null, lines: [], mix: [], runs: [], progress: null,
-  editing: null, outputs: new Map(), pending: null, readOnly: false,
+  editing: null, linkedBooking: null, outputs: new Map(), pending: null, readOnly: false,
   birdsScope: 'all',
 
-  // Booking a processing day and inviting people to it. isOwner is a
+  // Booking processing days and inviting people to them. isOwner is a
   // stricter gate than readOnly above — a member can record a run on this
-  // same screen, but booking the date and emailing people is the owner's
+  // same screen, but booking a date and emailing people is the owner's
   // call, same as starting a cycle or changing assumptions.
-  farm: null, isOwner: false, booking: null, recipients: []
+  //
+  // bookings is every booking for this cycle — more than one can exist since
+  // 025_multiple_bookings.sql, since birds sent in batches means dates
+  // booked in batches. editingBooking is whichever one the form below is
+  // currently open on, null while adding a brand new one.
+  farm: null, isOwner: false, bookings: [], editingBooking: null, recipients: []
 };
 
 const num = (n, d = 0) =>
@@ -90,95 +95,160 @@ async function boot() {
   const { data: farms } = await db.from('farms').select('id, name').order('id').limit(1);
   state.farm = farms && farms.length ? farms[0] : null;
 
-  await loadBooking();
+  await loadBookings();
 }
 
 /* ---------- Processing day booking ----------------------------------------
    Read-only for everyone (knowing the date matters for the daily work too);
    booking and sending is the owner's call, enforced by RLS (018) as well as
    by this screen only showing the editor to an owner. */
-async function loadBooking() {
+async function loadBookings() {
   if (!state.farm) return;
 
-  const { data: booking, error } = await db
+  const { data: bookings, error } = await db
     .from('v_processing_bookings')
     .select('*')
     .eq('cycle_id', state.cycle.id)
-    .maybeSingle();
+    .order('booked_on');
 
   if (error && !error.message.includes('does not exist')) {
-    showError(`Could not load the processing booking: ${error.message}`);
+    showError(`Could not load processing bookings: ${error.message}`);
   }
   if (error && error.message.includes('does not exist')) {
-    // Migration 018 not applied yet — booking simply is not offered rather
-    // than breaking the rest of the screen, which does not depend on it.
+    // Migration 020 not applied yet — bookings simply are not offered rather
+    // than breaking the rest of the screen, which does not depend on them.
     return;
   }
 
-  state.booking = booking || null;
-
-  // A cancelled booking is done — the cancellation notice has already gone
-  // out, and there is nothing left for this screen to keep saying about it.
-  // Everywhere below treats it exactly like no booking at all, so the recipient
-  // list starts fresh from the current farm members too, rather than showing
-  // who used to be invited to something that no longer exists.
-  const active = state.booking && !state.booking.is_cancelled ? state.booking : null;
-
-  if (active) {
-    const { data: invites } = await db
-      .from('processing_booking_invites')
-      .select('id, email, name, sent_at, sent_for_seq, error')
-      .eq('booking_id', active.id)
-      .order('id');
-    state.recipients = (invites || []).map((i) => ({ ...i }));
-  } else {
-    state.recipients = [];
-  }
-
+  state.bookings = bookings || [];
   renderBookingBanner();
 
   if (state.isOwner) {
-    $('bookingPanel').hidden = false;
-    await fillBookingForm();
+    $('bookingsSection').hidden = false;
+    renderBookingsList();
   }
 }
 
+/* Members see only the nearest upcoming booking — the one thing that changes
+   what today's feed and health decisions mean. Anything further out, or any
+   other booking, is the owner's business on the list below until it is
+   closer. */
 function renderBookingBanner() {
-  const b = state.booking;
   const banner = $('bookingBanner');
+  if (state.isOwner) { banner.hidden = true; return; }
 
-  // Owners get the full editor below instead — showing both says the same
-  // thing twice. A cancelled booking is treated the same as no booking at
-  // all: the cancellation notice already went out by email, and this screen
-  // has nothing left to keep saying about it afterward.
-  if (state.isOwner || !b || b.is_cancelled) { banner.hidden = true; return; }
+  const upcoming = state.bookings
+    .filter((b) => !b.is_cancelled && !b.is_past)
+    .sort((a, b) => a.booked_on.localeCompare(b.booked_on));
 
-  const when = b.booked_time ? `${shortDate(b.booked_on)} at ${b.booked_time.slice(0, 5)}` : shortDate(b.booked_on);
+  if (!upcoming.length) { banner.hidden = true; return; }
+
+  const next = upcoming[0];
+  const when = next.booked_time ? `${shortDate(next.booked_on)} at ${next.booked_time.slice(0, 5)}` : shortDate(next.booked_on);
   banner.hidden = false;
   banner.className = 'banner banner--ok';
   $('bookingBannerText').innerHTML =
-    `Processing booked for <strong>${when}</strong>${b.location ? ` at ${b.location}` : ''}.` +
-    (b.is_past ? ' <span class="caption">(this date has passed)</span>' : '');
+    `Processing booked for <strong>${when}</strong>${next.location ? ` at ${next.location}` : ''}.` +
+    (upcoming.length > 1 ? ` <span class="caption">+${upcoming.length - 1} more booked</span>` : '');
 }
+
+const BOOKING_TONE  = { cancelled: 'muted', needs_run: 'warn', done: 'ok', upcoming: 'ok' };
+const BOOKING_LABEL = { cancelled: 'Cancelled', needs_run: 'Awaiting run', done: 'Done', upcoming: 'Upcoming' };
+
+function bookingStatusOf(b) {
+  if (b.is_cancelled) return 'cancelled';
+  if (b.needs_run) return 'needs_run';
+  if (b.is_past) return 'done';
+  return 'upcoming';
+}
+
+function renderBookingsList() {
+  const wrap = $('bookingsList');
+  wrap.textContent = '';
+
+  if (!state.bookings.length) {
+    wrap.innerHTML = '<p class="caption">No processing dates booked yet.</p>';
+    return;
+  }
+
+  state.bookings.forEach((b) => {
+    const card = document.createElement('article');
+    card.className = 'batch';
+
+    const when = b.booked_time ? `${shortDate(b.booked_on)} at ${b.booked_time.slice(0, 5)}` : shortDate(b.booked_on);
+    const status = bookingStatusOf(b);
+
+    card.innerHTML =
+      `<div class="batch__head">
+         <div>
+           <div class="batch__name">${when}
+             <span class="inv-state inv-state--${BOOKING_TONE[status]}">${BOOKING_LABEL[status]}</span>
+           </div>
+           <div class="batch__meta">${b.location || 'No location set'}${b.birds_intended ? ` · ${num(b.birds_intended)} birds` : ''}</div>
+         </div>
+       </div>` +
+      (!b.is_cancelled
+        ? `<p class="caption" style="margin-top:.5rem">${num(b.invites_sent)} of ${num(b.invite_count)} invited` +
+          (b.invites_stale ? ` · ${num(b.invites_stale)} need resending` : '') + `.</p>`
+        : '');
+
+    // The reminder this whole feature exists for: a date that has come and
+    // gone with nothing recorded against it. Never shown for a cancelled
+    // booking — there is nothing left to have happened.
+    if (b.needs_run) {
+      const warn = document.createElement('p');
+      warn.className = 'caption';
+      warn.style.cssText = 'margin-top:.5rem;color:var(--warn)';
+      warn.textContent = 'This date has passed with nothing recorded — record the run to reflect it in the flock count.';
+      card.appendChild(warn);
+    }
+
+    if (!state.readOnly) {
+      const actions = document.createElement('div');
+      actions.className = 'person__actions';
+      actions.style.marginTop = '.9rem';
+
+      if (!b.is_cancelled) {
+        const edit = document.createElement('button');
+        edit.type = 'button'; edit.className = 'chip-btn'; edit.setAttribute('data-press', '');
+        edit.textContent = 'Edit';
+        edit.addEventListener('click', () => openBookingForm(b));
+        actions.appendChild(edit);
+      }
+
+      if (b.needs_run) {
+        const record = document.createElement('button');
+        record.type = 'button'; record.className = 'chip-btn'; record.setAttribute('data-press', '');
+        record.style.cssText = 'background:var(--accent);color:var(--accent-ink);font-weight:600';
+        record.textContent = 'Record the run';
+        record.addEventListener('click', () => openForm(null, b));
+        actions.appendChild(record);
+      }
+
+      card.appendChild(actions);
+    }
+
+    wrap.appendChild(card);
+  });
+}
+
+/* ---------- One booking's form, shared by "Add a booking" and "Edit" ------- */
+$('addBookingBtn').addEventListener('click', () => openBookingForm(null));
 
 /* Farm members are offered by default — a booking with nobody on it is
    rarely what was meant — and anyone already invited stays listed even if
-   they have since left the farm, since the invite was already sent.
+   they have since left the farm, since the invite was already sent. */
+async function openBookingForm(booking) {
+  state.editingBooking = booking;
+  $('bookingFormTitle').textContent = booking ? 'Edit booking' : 'New booking';
 
-   A cancelled booking behaves exactly like no booking here: the form comes
-   back blank rather than showing what used to be booked. The cancellation
-   notice already went out by email when it was cancelled — this screen has
-   said its piece and does not need to keep saying it after every refresh. */
-async function fillBookingForm() {
-  const active = state.booking && !state.booking.is_cancelled ? state.booking : null;
-
-  $('bDate').value = active ? active.booked_on : '';
-  $('bTime').value = active?.booked_time ? active.booked_time.slice(0, 5) : '';
-  $('bLocation').value = active?.location ?? '';
-  $('bNotes').value = active?.notes ?? '';
+  $('bDate').value = booking ? booking.booked_on : '';
+  $('bTime').value = booking?.booked_time ? booking.booked_time.slice(0, 5) : '';
+  $('bLocation').value = booking?.location ?? '';
+  $('bNotes').value = booking?.notes ?? '';
 
   const birdsAlive = Number(state.progress?.birds_alive ?? 0);
-  const intended = active?.birds_intended;
+  const intended = booking?.birds_intended;
   // "Some" only when a real, still-relevant plan is on file — a stale
   // intended count left over from before some birds were already sent
   // would otherwise reopen as a confusing partial default.
@@ -186,17 +256,24 @@ async function fillBookingForm() {
   setBirdsScope(isPartial ? 'some' : 'all');
   $('bBirds').value = isPartial ? intended : '';
 
-  $('bookingStatus').textContent = active
-    ? `${num(active.invites_sent)} of ${num(active.invite_count)} sent` +
-      (active.invites_stale ? ` · ${num(active.invites_stale)} need resending` : '')
+  $('bookingStatus').textContent = booking
+    ? `${num(booking.invites_sent)} of ${num(booking.invite_count)} sent` +
+      (booking.invites_stale ? ` · ${num(booking.invites_stale)} need resending` : '')
     : 'Not booked yet';
 
-  $('cancelBookingBtn').hidden = !active;
+  $('cancelBookingBtn').hidden = !booking || booking.is_cancelled;
 
-  // Merged in every time, not only when the list starts empty — someone who
-  // joins the farm after the first booking should still show up as a
-  // candidate next time this opens, not just on the very first booking ever
-  // made for this cycle.
+  if (booking) {
+    const { data: invites } = await db
+      .from('processing_booking_invites')
+      .select('id, email, name, sent_at, sent_for_seq, error')
+      .eq('booking_id', booking.id)
+      .order('id');
+    state.recipients = (invites || []).map((i) => ({ ...i }));
+  } else {
+    state.recipients = [];
+  }
+
   const { data: people } = await db.rpc('farm_people', { p_farm_id: state.farm.id });
   const already = new Set(state.recipients.map((r) => r.email.toLowerCase()));
   (people || []).forEach((p) => {
@@ -206,7 +283,18 @@ async function fillBookingForm() {
   });
 
   renderRecipients();
+  showError(null);
+  $('inviteResult').textContent = '';
+  $('bookingFormPanel').hidden = false;
+  $('bookingFormPanel').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+function closeBookingForm() {
+  $('bookingFormPanel').hidden = true;
+  state.editingBooking = null;
+}
+
+$('closeBookingFormBtn').addEventListener('click', closeBookingForm);
 
 function renderRecipients() {
   const wrap = $('recipientList');
@@ -221,7 +309,7 @@ function renderRecipients() {
     const row = document.createElement('div');
     row.className = 'recip-row';
 
-    const stale = state.booking && r.sent_at && r.sent_for_seq !== state.booking.sequence_no;
+    const stale = state.editingBooking && r.sent_at && r.sent_for_seq !== state.editingBooking.sequence_no;
     const chip = r.error
       ? '<span class="inv-state inv-state--warn">failed</span>'
       : stale
@@ -313,30 +401,42 @@ $('saveBookingBtn').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = 'Saving…';
 
-  // One booking per cycle: created the first time, updated every time after.
-  // The trigger behind this (018, extended in 023) only advances the
-  // calendar SEQUENCE when the date, time, location or cancelled state
-  // actually changes — editing just the notes does not force everyone's
-  // calendar to re-confirm.
-  //
-  // cancelled_at: null on every save, deliberately — saving here from a
-  // cancelled booking is exactly how a fresh date gets booked again for the
-  // same cycle, and this is what reactivates it.
-  const { data: saved, error: saveErr } = await db
-    .from('processing_bookings')
-    .upsert({
-      farm_id: state.farm.id,
-      cycle_id: state.cycle.id,
-      booked_on: date,
-      booked_time: $('bTime').value || null,
-      location: $('bLocation').value.trim() || null,
-      notes: $('bNotes').value.trim() || null,
-      birds_intended: birdsIntended,
-      cancelled_at: null,
-      created_by: (await db.auth.getSession()).data.session?.user?.id ?? null
-    }, { onConflict: 'cycle_id' })
-    .select()
-    .single();
+  const payload = {
+    booked_on: date,
+    booked_time: $('bTime').value || null,
+    location: $('bLocation').value.trim() || null,
+    notes: $('bNotes').value.trim() || null,
+    birds_intended: birdsIntended,
+    cancelled_at: null
+  };
+
+  // A cycle can hold more than one booking since 025_multiple_bookings.sql,
+  // so this is a plain update-by-id when editing and an insert otherwise —
+  // never an upsert keyed on the cycle the way a single booking once allowed.
+  let saved, saveErr;
+  if (state.editingBooking) {
+    // The trigger behind this (018, extended in 023) only advances the
+    // calendar SEQUENCE when the date, time, location or cancelled state
+    // actually changes — editing just the notes does not force everyone's
+    // calendar to re-confirm.
+    ({ data: saved, error: saveErr } = await db
+      .from('processing_bookings')
+      .update(payload)
+      .eq('id', state.editingBooking.id)
+      .select()
+      .single());
+  } else {
+    ({ data: saved, error: saveErr } = await db
+      .from('processing_bookings')
+      .insert({
+        ...payload,
+        farm_id: state.farm.id,
+        cycle_id: state.cycle.id,
+        created_by: (await db.auth.getSession()).data.session?.user?.id ?? null
+      })
+      .select()
+      .single());
+  }
 
   if (saveErr) {
     btn.disabled = false; btn.textContent = 'Save & send invites';
@@ -346,7 +446,7 @@ $('saveBookingBtn').addEventListener('click', async () => {
     return;
   }
 
-  state.booking = saved;
+  state.editingBooking = saved;
 
   // Reconcile who is actually on the list: drop anyone removed, add anyone
   // new. Existing recipients that survived are left untouched here — their
@@ -379,8 +479,8 @@ $('saveBookingBtn').addEventListener('click', async () => {
   btn.disabled = false;
   btn.textContent = 'Save & send invites';
 
-  if (error) { showError(await readFunctionError(error)); await loadBooking(); return; }
-  if (data?.error) { showError(data.error); await loadBooking(); return; }
+  if (error) { showError(await readFunctionError(error)); await loadBookings(); return; }
+  if (data?.error) { showError(data.error); await loadBookings(); return; }
 
   $('inviteResult').innerHTML =
     `<p class="caption" style="margin-top:.9rem">` +
@@ -388,7 +488,7 @@ $('saveBookingBtn').addEventListener('click', async () => {
     (data.failed ? `, ${num(data.failed)} failed — check the addresses below` : '.') +
     `</p>`;
 
-  await loadBooking();
+  await loadBookings();
 });
 
 async function readFunctionError(error) {
@@ -515,14 +615,20 @@ function renderRuns() {
 $('addRunBtn').addEventListener('click', () => openForm(null));
 $('cancelBtn').addEventListener('click', closeForm);
 
-async function openForm(run) {
+/* fromBooking: opened via a booking card's "Record the run" — pre-fills the
+   date and bird count from what was booked, and links the two so the
+   booking's needs_run reminder clears once this saves. Never set when
+   editing an existing run: that run already carries whatever link it has,
+   preserved as-is by save_processing_run's own coalesce. */
+async function openForm(run, fromBooking) {
   state.editing = run;
+  state.linkedBooking = fromBooking || null;
   state.outputs = new Map();
 
-  $('formTitle').textContent = run ? 'Edit run' : 'Record a run';
-  $('fDate').value = run ? run.processed_on : today();
+  $('formTitle').textContent = run ? 'Edit run' : fromBooking ? 'Record the run' : 'Record a run';
+  $('fDate').value = run ? run.processed_on : fromBooking ? fromBooking.booked_on : today();
   updateFutureDateHint();
-  $('fBirds').value = run ? run.birds_processed : '';
+  $('fBirds').value = run ? run.birds_processed : fromBooking?.birds_intended ?? '';
   $('fCondemned').value = run ? run.birds_condemned : 0;
   $('fLive').value = run?.live_weight_lb ?? '';
   $('fDressed').value = run?.dressed_weight_lb ?? '';
@@ -564,6 +670,7 @@ $('fDate').addEventListener('change', updateFutureDateHint);
 function closeForm() {
   $('formPanel').hidden = true;
   state.editing = null;
+  state.linkedBooking = null;
 }
 
 function renderOutputs() {
@@ -684,7 +791,11 @@ $('saveRunBtn').addEventListener('click', async () => {
     p_processor: $('fProcessor').value.trim() || null,
     p_lot_code: $('fLot').value.trim() || null,
     p_outputs: outputs,
-    p_run_id: state.editing ? state.editing.id : null
+    p_run_id: state.editing ? state.editing.id : null,
+    // null when editing an existing run with no booking opened alongside it
+    // — save_processing_run's own coalesce leaves whatever link it already
+    // has untouched rather than wiping it.
+    p_booking_id: state.linkedBooking ? state.linkedBooking.id : null
   });
 
   btn.disabled = false;
@@ -704,10 +815,10 @@ $('saveRunBtn').addEventListener('click', async () => {
    otherwise Roost would consider it cancelled while their phones still show
    the old date. */
 $('cancelBookingBtn').addEventListener('click', () => {
-  if (!state.booking) return;
-  const when = state.booking.booked_time
-    ? `${shortDate(state.booking.booked_on)} at ${state.booking.booked_time.slice(0, 5)}`
-    : shortDate(state.booking.booked_on);
+  if (!state.editingBooking) return;
+  const when = state.editingBooking.booked_time
+    ? `${shortDate(state.editingBooking.booked_on)} at ${state.editingBooking.booked_time.slice(0, 5)}`
+    : shortDate(state.editingBooking.booked_on);
   $('cancelBookingWhat').textContent =
     `Booked for ${when}. Anyone already sent an invite gets a cancellation for it — ` +
     `their calendar should drop the event automatically.`;
@@ -728,7 +839,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 $('cancelBookingConfirm').addEventListener('click', async () => {
-  if (!state.booking) return;
+  if (!state.editingBooking) return;
+  const bookingId = state.editingBooking.id;
   const btn = $('cancelBookingConfirm');
   btn.disabled = true; btn.textContent = 'Cancelling…';
   showError(null);
@@ -736,7 +848,7 @@ $('cancelBookingConfirm').addEventListener('click', async () => {
   const { error: cancelErr } = await db
     .from('processing_bookings')
     .update({ cancelled_at: new Date().toISOString() })
-    .eq('id', state.booking.id);
+    .eq('id', bookingId);
 
   if (cancelErr) {
     btn.disabled = false; btn.textContent = 'Cancel booking';
@@ -746,21 +858,22 @@ $('cancelBookingConfirm').addEventListener('click', async () => {
   }
 
   const { data, error: sendErr } = await db.functions.invoke('send-processing-invite', {
-    body: { booking_id: state.booking.id, cancel: true }
+    body: { booking_id: bookingId, cancel: true }
   });
 
   btn.disabled = false; btn.textContent = 'Cancel booking';
   dismissCancelSheet();
 
+  // The cancelled booking now just sits in the list, muted — closing the
+  // form rather than trying to keep it open on something there is nothing
+  // left to edit.
+  closeBookingForm();
+
   if (sendErr) {
     showError(`Booking cancelled, but the cancellation notice failed to send: ${await readFunctionError(sendErr)}`);
-  } else if (data?.sent) {
-    $('inviteResult').innerHTML =
-      `<p class="caption" style="margin-top:.75rem">Booking cancelled. Notified ${num(data.sent)} ` +
-      `${data.sent === 1 ? 'person' : 'people'}${data.failed ? `, ${num(data.failed)} failed` : ''}.</p>`;
   }
 
-  await loadBooking();
+  await loadBookings();
 });
 
 /* ---------- Offering to close a finished cycle -----------------------------

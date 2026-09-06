@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Roost — migration audit
 --
--- Not a migration. Checks which of 001-024 have actually been applied, by
+-- Not a migration. Checks which of 001-025 have actually been applied, by
 -- looking for one distinctive object each creates. Run this any time you are
 -- unsure what state the database is in.
 --
@@ -56,6 +56,16 @@ select * from (values
                            and exists (select 1 from information_schema.columns
                                         where table_name='v_processing_bookings' and column_name='is_cancelled')),
   ('024_weight_uniformity',    exists (select 1 from information_schema.columns
-                                        where table_name='sample_weights' and column_name='weight_cv_pct'))
+                                        where table_name='sample_weights' and column_name='weight_cv_pct')),
+  ('025_multiple_bookings',    exists (select 1 from information_schema.columns
+                                        where table_name='processing_runs' and column_name='booking_id')
+                           and not exists (
+                             select 1 from pg_constraint con
+                             join pg_class rel on rel.oid = con.conrelid
+                             where rel.relname='processing_bookings' and con.contype='u'
+                               and con.conkey = (select array_agg(attnum order by attnum)
+                                                  from pg_attribute
+                                                  where attrelid = rel.oid and attname = 'cycle_id')
+                           ))
 ) as t(migration, applied)
 order by migration;

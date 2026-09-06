@@ -212,10 +212,14 @@ function renderBookingNote(booking) {
 async function renderActual() {
   const [{ data }, { data: booking }] = await Promise.all([
     db.from('v_cycle_actual').select('*').eq('cycle_id', state.cycle.id).maybeSingle(),
-    // One row per cycle (020_processing_bookings.sql) — older databases
-    // have no such view, so this fails soft rather than blocking the panel.
+    // A cycle can hold more than one booking (025_multiple_bookings.sql) —
+    // this panel only has room to name one, so it asks for the soonest
+    // upcoming rather than fetching all of them to filter client-side.
+    // Older databases have no such view, so this fails soft rather than
+    // blocking the panel.
     db.from('v_processing_bookings').select('booked_on, is_past, is_cancelled')
-      .eq('cycle_id', state.cycle.id).maybeSingle()
+      .eq('cycle_id', state.cycle.id).eq('is_cancelled', false).eq('is_past', false)
+      .order('booked_on').limit(1).maybeSingle()
   ]);
 
   renderBookingNote(booking);

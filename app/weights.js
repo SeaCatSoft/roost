@@ -53,11 +53,22 @@ async function boot() {
 }
 
 async function loadSamples() {
-  const { data, error } = await db
+  let { data, error } = await db
     .from('sample_weights')
     .select('id, day_number, birds_sampled, avg_weight_g, weight_cv_pct')
     .eq('cycle_id', state.cycle.id)
     .order('day_number');
+
+  if (error && error.message.includes('does not exist')) {
+    // Migration 024 not applied yet — fall back to the columns that have
+    // always existed rather than blanking the whole screen over one that
+    // hasn't. Uniformity just stays unshown until it runs.
+    ({ data, error } = await db
+      .from('sample_weights')
+      .select('id, day_number, birds_sampled, avg_weight_g')
+      .eq('cycle_id', state.cycle.id)
+      .order('day_number'));
+  }
 
   if (error) { showError(`Could not load weighings: ${error.message}`); return; }
 

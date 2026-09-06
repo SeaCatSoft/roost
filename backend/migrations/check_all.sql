@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Roost — migration audit
 --
--- Not a migration. Checks which of 001-023 have actually been applied, by
+-- Not a migration. Checks which of 001-024 have actually been applied, by
 -- looking for one distinctive object each creates. Run this any time you are
 -- unsure what state the database is in.
 --
@@ -54,6 +54,8 @@ select * from (values
   ('023_cancel_booking',       exists (select 1 from information_schema.columns
                                         where table_name='processing_bookings' and column_name='cancelled_at')
                            and exists (select 1 from information_schema.columns
-                                        where table_name='v_processing_bookings' and column_name='is_cancelled'))
+                                        where table_name='v_processing_bookings' and column_name='is_cancelled')),
+  ('024_weight_uniformity',    exists (select 1 from information_schema.columns
+                                        where table_name='sample_weights' and column_name='weight_cv_pct'))
 ) as t(migration, applied)
 order by migration;

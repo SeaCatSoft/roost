@@ -55,7 +55,7 @@ async function boot() {
 async function loadSamples() {
   const { data, error } = await db
     .from('sample_weights')
-    .select('id, day_number, birds_sampled, avg_weight_g')
+    .select('id, day_number, birds_sampled, avg_weight_g, weight_cv_pct')
     .eq('cycle_id', state.cycle.id)
     .order('day_number');
 
@@ -88,8 +88,12 @@ function renderHeadline() {
     $('vsStandard').style.color = pct < -8 ? 'var(--warn)' : '';
   }
 
-  // Uniformity only exists for weighings entered bird by bird.
-  $('uniformity').textContent = '—';
+  // Only present from 024_weight_uniformity.sql onward, and only for a
+  // sample of two or more birds — a spread needs more than one bird to mean
+  // anything. A weighing recorded before that migration, or as a single
+  // bird, has no way to reconstruct this after the fact: only the average
+  // was ever kept, not the individual weights behind it.
+  $('uniformity').textContent = latest.weight_cv_pct != null ? `${fmt(Number(latest.weight_cv_pct), 1)}%` : '—';
 }
 
 /* ---------- Chart --------------------------------------------------------- */
@@ -182,7 +186,8 @@ function renderHistory() {
     row.innerHTML =
       `<div>
          <div class="weigh-row__day">Day ${s.day_number}</div>
-         <div class="weigh-row__meta">${s.birds_sampled} bird${s.birds_sampled === 1 ? '' : 's'}</div>
+         <div class="weigh-row__meta">${s.birds_sampled} bird${s.birds_sampled === 1 ? '' : 's'}${
+           s.weight_cv_pct != null ? ` · ${fmt(Number(s.weight_cv_pct), 1)}% spread` : ''}</div>
        </div>
        <div class="weigh-row__val tnum">${g >= 1000 ? fmt(g / 1000, 2) + ' kg' : fmt(g) + ' g'}</div>
        <div class="weigh-row__delta tnum${pct !== null && pct < -8 ? ' is-behind' : ''}">${
@@ -245,6 +250,21 @@ function parseWeights(text) {
     .filter((n) => Number.isFinite(n) && n > 0);
 }
 
+/* Sample standard deviation, then CV — the standard flock uniformity measure.
+   One definition, used both for the live tally below and for what actually
+   gets saved (weight_cv_pct, 024_weight_uniformity.sql), so the number shown
+   while entering a weighing can never drift from the one kept afterward.
+   null rather than 0 for a single bird — a spread needs more than one bird
+   to mean anything, and 0% would misread as "perfectly uniform." */
+function computeStats(weights) {
+  const n = weights.length;
+  const mean = n ? weights.reduce((a, b) => a + b, 0) / n : 0;
+  if (n < 2) return { n, mean, cv: null };
+  const variance = weights.reduce((acc, w) => acc + Math.pow(w - mean, 2), 0) / (n - 1);
+  const cv = mean > 0 ? (Math.sqrt(variance) / mean) * 100 : null;
+  return { n, mean, cv };
+}
+
 function recalc() {
   if (!state.cycle) return;   // form is hidden before sign-in, but never assume it
 
@@ -269,18 +289,11 @@ function recalc() {
   }
 
   tally.hidden = false;
-  const n = state.weights.length;
-  const mean = state.weights.reduce((a, b) => a + b, 0) / n;
-
-  // Sample standard deviation, then CV — the standard flock uniformity measure.
-  const variance = n > 1
-    ? state.weights.reduce((acc, w) => acc + Math.pow(w - mean, 2), 0) / (n - 1)
-    : 0;
-  const cv = mean > 0 ? (Math.sqrt(variance) / mean) * 100 : 0;
+  const { n, mean, cv } = computeStats(state.weights);
 
   $('tallyCount').textContent = n;
   $('tallyAvg').textContent = mean >= 1000 ? `${fmt(mean / 1000, 2)} kg` : `${fmt(mean)} g`;
-  $('tallyCv').textContent = n > 1 ? `${fmt(cv, 1)}%` : '—';
+  $('tallyCv').textContent = cv != null ? `${fmt(cv, 1)}%` : '—';
 
   const messages = [];
 
@@ -319,7 +332,7 @@ $('saveBtn').addEventListener('click', async () => {
   btn.textContent = 'Saving…';
   showError(null);
 
-  const mean = state.weights.reduce((a, b) => a + b, 0) / state.weights.length;
+  const { mean, cv } = computeStats(state.weights);
   const { data: { session } } = await db.auth.getSession();
 
   // One weighing per cycle-day, so re-weighing the same day corrects it.
@@ -328,6 +341,7 @@ $('saveBtn').addEventListener('click', async () => {
     day_number: day,
     birds_sampled: state.weights.length,
     avg_weight_g: Math.round(mean * 10) / 10,
+    weight_cv_pct: cv != null ? Math.round(cv * 100) / 100 : null,
     recorded_by: session?.user?.id ?? null
   }, { onConflict: 'cycle_id,day_number' });
 

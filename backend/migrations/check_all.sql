@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Roost — migration audit
 --
--- Not a migration. Checks which of 001-025 have actually been applied, by
+-- Not a migration. Checks which of 001-026 have actually been applied, by
 -- looking for one distinctive object each creates. Run this any time you are
 -- unsure what state the database is in.
 --
@@ -66,6 +66,8 @@ select * from (values
                                and con.conkey = (select array_agg(attnum order by attnum)
                                                   from pg_attribute
                                                   where attrelid = rel.oid and attname = 'cycle_id')
-                           ))
+                           )),
+  ('026_feed_stock',           to_regclass('public.feed_stock_counts') is not null
+                           and to_regclass('public.v_feed_stock') is not null)
 ) as t(migration, applied)
 order by migration;

@@ -764,6 +764,7 @@ body { background: var(--page); }
 .age-row__fill { display: block; height: 100%; border-radius: var(--r-pill); background: var(--accent); }
 .age-row__fill.is-late { background: var(--warn); }
 .age-row__val { font-size: .8125rem; text-align: right; }
+.age-row--removable { grid-template-columns: 56px 1fr auto auto; padding-block: .3rem; }
 
 .inv-state {
   font-size: .65rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;

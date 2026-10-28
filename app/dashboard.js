@@ -14,6 +14,7 @@ import {
   db, isConfigured, $, today, daysBetween, banner, loadOpenCycle,
   myRole, standardWeightAt as standardAt, formatShortDate
 } from './db.js';
+import { loadFeedAlerts, renderFeedAlerts } from './feedalerts.js';
 
 const screens = { setup: $('setupScreen'), auth: $('authScreen'), app: $('appScreen') };
 const show = (n) => Object.entries(screens).forEach(([k, el]) => { el.hidden = k !== n; });
@@ -209,7 +210,12 @@ async function boot() {
   // it afterwards would leave a brand new farm with nothing on screen naming
   // it at all.
   const { data: farms } = await db.from('farms').select('id, name').order('id').limit(1);
-  if (farms && farms.length) $('barTitle').textContent = farms[0].name;
+  if (farms && farms.length) {
+    $('barTitle').textContent = farms[0].name;
+    // Not awaited: the store is farm-wide and matters even with no open
+    // cycle, but it should never hold up the rest of the dashboard.
+    loadFeedAlerts(farms[0].id).then((rows) => renderFeedAlerts($('feedAlerts'), rows));
+  }
 
   let cycle;
   try { cycle = await loadOpenCycle(); }

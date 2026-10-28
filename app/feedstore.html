@@ -50,6 +50,8 @@
       <div id="appOkText"></div>
     </div>
 
+    <div id="feedAlerts"></div>
+
     <section class="cycle-head">
       <p class="caption" id="farmName">Loading…</p>
       <h1 class="title" style="margin-block:.35rem .5rem">Bags in the store</h1>
@@ -153,6 +155,27 @@
 
       <button class="btn btn--primary" type="button" id="countBtn" data-press
               style="width:100%;min-height:46px;margin-top:1rem">Save count</button>
+    </section>
+
+    <!-- ===== Alert window ===== -->
+    <section class="panel" id="alertPanel" hidden>
+      <h2 class="panel__title">Low-feed warning</h2>
+      <p class="caption" style="margin-top:.25rem;margin-bottom:1rem" id="alertExplain">
+        A ration is flagged low when the bags left, at the last week's average
+        use, will not last this many days. Set it to at least your supplier's
+        delivery time plus a day or two.
+      </p>
+      <div class="setting-grid" id="alertEdit" hidden>
+        <label class="setting">
+          <span class="setting__label">Warn me with</span>
+          <span class="setting__input">
+            <input id="alertDays" type="number" inputmode="numeric" min="1" max="60" step="1">
+            <span class="setting__unit">days to spare</span>
+          </span>
+        </label>
+      </div>
+      <button class="btn btn--glass" type="button" id="alertBtn" data-press hidden
+              style="width:100%;min-height:42px;margin-top:1rem">Save</button>
     </section>
 
     <section style="margin-top:1.75rem" id="recentSection" hidden>

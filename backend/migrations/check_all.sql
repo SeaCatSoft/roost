@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Roost — migration audit
 --
--- Not a migration. Checks which of 001-026 have actually been applied, by
+-- Not a migration. Checks which of 001-027 have actually been applied, by
 -- looking for one distinctive object each creates. Run this any time you are
 -- unsure what state the database is in.
 --
@@ -68,6 +68,9 @@ select * from (values
                                                   where attrelid = rel.oid and attname = 'cycle_id')
                            )),
   ('026_feed_stock',           to_regclass('public.feed_stock_counts') is not null
-                           and to_regclass('public.v_feed_stock') is not null)
+                           and to_regclass('public.v_feed_stock') is not null),
+  ('027_feed_alerts',          to_regclass('public.v_feed_alerts') is not null
+                           and exists (select 1 from information_schema.columns
+                                        where table_name='farms' and column_name='feed_alert_days'))
 ) as t(migration, applied)
 order by migration;

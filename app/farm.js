@@ -17,6 +17,7 @@
 import {
   db, isConfigured, $, today, daysBetween, banner, myRole, standardWeightAt
 } from './db.js';
+import { loadFeedAlerts, renderFeedAlerts } from './feedalerts.js';
 
 const screens = {
   setup: $('setupScreen'), auth: $('authScreen'), deny: $('denyScreen'), app: $('appScreen')
@@ -71,6 +72,7 @@ async function boot() {
   $('barTitle').textContent = state.farm.name;
   $('farmTitle').textContent = state.farm.name;
   renderForecastOptIn();
+  loadFeedAlerts(state.farm.id).then((rows) => renderFeedAlerts($('feedAlerts'), rows));
 
   const [ageing, balances, unsent, cycles, book] = await Promise.all([
     db.from('v_invoice_ageing').select('*').maybeSingle(),

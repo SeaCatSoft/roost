@@ -15,6 +15,7 @@
 import {
   db, isConfigured, $, today, banner, myRole, canEdit
 } from './db.js';
+import { loadFeedAlerts, renderFeedAlerts } from './feedalerts.js';
 
 const screens = { setup: $('setupScreen'), auth: $('authScreen'), app: $('appScreen') };
 const show = (n) => Object.entries(screens).forEach(([k, el]) => { el.hidden = k !== n; });
@@ -26,8 +27,8 @@ if (!isConfigured) { show('setup'); throw new Error('Supabase is not configured'
 const PHASES = ['Starter', 'Grower', 'Finisher'];
 
 const state = {
-  farm: null, cycle: null, assumptions: null, readOnly: false,
-  stock: [], plan: [], openedThisCycle: {}
+  farm: null, cycle: null, assumptions: null, readOnly: false, isOwner: false,
+  stock: [], plan: [], openedThisCycle: {}, alerts: []
 };
 
 const num = (n, d = 0) =>
@@ -45,9 +46,15 @@ async function boot() {
   show('app');
   showError(null);
 
-  state.readOnly = !canEdit(await myRole());
+  const role = await myRole();
+  state.readOnly = !canEdit(role);
+  state.isOwner = role === 'owner';
 
-  const { data: farms } = await db.from('farms').select('id, name').order('id').limit(1);
+  // feed_alert_days arrives with 027; fall back so the store still works
+  // before it has been run.
+  let { data: farms, error: farmsError } = await db.from('farms')
+    .select('id, name, feed_alert_days').order('id').limit(1);
+  if (farmsError) ({ data: farms } = await db.from('farms').select('id, name').order('id').limit(1));
   if (!farms || !farms.length) { showError('No farm is linked to this account yet.'); return; }
   state.farm = farms[0];
   $('farmName').textContent = state.farm.name;
@@ -60,7 +67,7 @@ async function boot() {
   state.cycle = cycles && cycles.length ? cycles[0] : null;
 
   const cycleId = state.cycle?.id ?? -1;
-  const [stock, plan, opened, assumptions, purchases, counts] = await Promise.all([
+  const [stock, plan, opened, assumptions, purchases, counts, alerts] = await Promise.all([
     db.from('v_feed_stock').select('*').eq('farm_id', state.farm.id),
     db.from('v_cycle_feed_by_phase').select('phase, bags').eq('cycle_id', cycleId),
     db.from('feed_bag_openings').select('phase').eq('cycle_id', cycleId),
@@ -74,7 +81,8 @@ async function boot() {
     db.from('feed_stock_counts')
       .select('id, phase, counted_on, bags, created_at')
       .eq('farm_id', state.farm.id)
-      .order('counted_on', { ascending: false }).order('id', { ascending: false }).limit(15)
+      .order('counted_on', { ascending: false }).order('id', { ascending: false }).limit(15),
+    loadFeedAlerts(state.farm.id)
   ]);
 
   if (stock.error) {
@@ -86,6 +94,9 @@ async function boot() {
   }
 
   state.stock = stock.data || [];
+  state.alerts = alerts;
+  renderFeedAlerts($('feedAlerts'), alerts, { linkToStore: false });
+  renderAlertSetting();
   state.plan = plan.data || [];
   state.assumptions = assumptions.data || null;
   state.openedThisCycle = {};
@@ -119,8 +130,16 @@ function renderList() {
     const need = stillNeeded(phase);
     const toBuy = need === null ? null : Math.max(0, need - Math.max(0, onHand));
 
+    // Days left only means something for a ration in use and counted —
+    // v_feed_alerts (027) decides that, so this never second-guesses it.
+    const a = state.alerts.find((x) => x.phase === phase);
+    const showDays = a && (a.level === 'ok' || a.level === 'low' || a.level === 'out');
+    const daysLeft = showDays ? Number(a.days_left) : null;
+    const urgent = a && (a.level === 'low' || a.level === 'out');
+
     const meta = [
       r.counted_on ? `counted ${shortDate(r.counted_on)}` : 'never counted',
+      a && a.bags_per_day ? `using ${num(a.bags_per_day, 1)} a day` : null,
       r.last_bought_on ? `last delivery ${shortDate(r.last_bought_on)}` : null
     ].filter(Boolean).join(' · ');
 
@@ -141,6 +160,9 @@ function renderList() {
          <div><span class="metric__k">To buy</span><span class="batch__v tnum" style="color:${
            toBuy ? 'var(--warn)' : toBuy === 0 ? 'var(--accent)' : 'inherit'}">${
            toBuy === null ? '—' : num(toBuy)}</span></div>
+         <div><span class="metric__k">Days left</span><span class="batch__v tnum" style="color:${
+           urgent ? 'var(--warn)' : 'inherit'}">${
+           daysLeft === null ? '—' : num(daysLeft, daysLeft < 3 ? 1 : 0)}</span></div>
        </div>`;
 
     // Negative is never a real number of bags. It means bags were opened
@@ -168,6 +190,39 @@ function renderList() {
       '<p class="caption" style="margin-top:.75rem">No open cycle, so there is no plan to say what is still needed.</p>');
   }
 }
+
+/* ---------- Warning window ------------------------------------------------- */
+/* Owner-set (farms_write, 009). Everyone else is told what it is, so a member
+   seeing "low" knows what low means here. Hidden entirely before 027. */
+function renderAlertSetting() {
+  const days = state.farm.feed_alert_days;
+  $('alertPanel').hidden = days == null;
+  if (days == null) return;
+
+  $('alertEdit').hidden = !state.isOwner;
+  $('alertBtn').hidden = !state.isOwner;
+  $('alertDays').value = days;
+  if (!state.isOwner) {
+    $('alertExplain').textContent =
+      `A ration is flagged low when the bags left, at the last week's average use, ` +
+      `will not last ${days} day${days === 1 ? '' : 's'}. The farm owner sets this.`;
+  }
+}
+
+$('alertBtn').addEventListener('click', async () => {
+  showError(null); showOk(null);
+  const n = Number($('alertDays').value);
+  if (!Number.isInteger(n) || n < 1 || n > 60) { showError('Enter a whole number of days, 1 to 60.'); return; }
+
+  const btn = $('alertBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const { error } = await db.from('farms').update({ feed_alert_days: n }).eq('id', state.farm.id);
+  btn.disabled = false; btn.textContent = 'Save';
+  if (error) { showError(error.message); return; }
+
+  showOk(`You'll be warned when any ration has less than ${n} day${n === 1 ? '' : 's'} left.`);
+  await boot();
+});
 
 /* ---------- Forms --------------------------------------------------------- */
 function plannedCost(phase) {

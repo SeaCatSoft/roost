@@ -20,7 +20,7 @@ if (!isConfigured) { show('setup'); throw new Error('Supabase is not configured'
 
 const TO_GRAMS = { g: 1, kg: 1000, lb: 453.59237 };
 
-const state = { cycle: null, unit: 'g', weights: [], samples: [], currentDay: 1 };
+const state = { cycle: null, unit: 'g', weights: [], samples: [], currentDay: 1, editable: false };
 
 const fmt = (n, d = 0) =>
   Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -44,9 +44,10 @@ async function boot() {
   $('dayInput').value = state.currentDay;
   $('dayInput').max = state.cycle.target_sale_age;
 
+  state.editable = canEdit(await myRole());
   await loadSamples();
 
-  if (!canEdit(await myRole())) {
+  if (!state.editable) {
     lockForViewer(document.querySelector('.panel:nth-of-type(2)'),
       'You have view-only access. Weighings are shown, but cannot be recorded.');
   }
@@ -193,7 +194,7 @@ function renderHistory() {
     const pct = std ? ((g / std) - 1) * 100 : null;
 
     const row = document.createElement('div');
-    row.className = 'weigh-row';
+    row.className = state.editable ? 'weigh-row weigh-row--editable' : 'weigh-row';
     row.innerHTML =
       `<div>
          <div class="weigh-row__day">Day ${s.day_number}</div>
@@ -204,8 +205,44 @@ function renderHistory() {
        <div class="weigh-row__delta tnum${pct !== null && pct < -8 ? ' is-behind' : ''}">${
          pct === null ? '' : (pct >= 0 ? '+' : '−') + fmt(Math.abs(pct), 1) + '%'
        }</div>`;
+    if (state.editable) row.appendChild(removeButton(s));
     wrap.appendChild(row);
   });
+}
+
+/* Two taps, not a dialog: the first arms it, the second deletes. A stray tap
+   on a phone in a chicken house shouldn't cost a weighing, and the label
+   says which day is about to go. Disarms itself if left alone. */
+function removeButton(s) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'chip-btn chip-btn--danger';
+  btn.setAttribute('data-press', '');
+  btn.textContent = 'Remove';
+
+  let armed = null;
+  btn.addEventListener('click', async () => {
+    if (!armed) {
+      btn.textContent = `Remove day ${s.day_number}?`;
+      armed = setTimeout(() => { armed = null; btn.textContent = 'Remove'; }, 4000);
+      return;
+    }
+    clearTimeout(armed);
+    btn.disabled = true;
+    btn.textContent = 'Removing…';
+    showError(null);
+
+    const { error } = await db.from('sample_weights').delete().eq('id', s.id);
+    if (error) {
+      showError(`Could not remove the day ${s.day_number} weighing: ${error.message}`);
+      armed = null;
+      btn.disabled = false;
+      btn.textContent = 'Remove';
+      return;
+    }
+    await loadSamples();
+  });
+  return btn;
 }
 
 /* ---------- Entry --------------------------------------------------------- */

@@ -1,0 +1,33 @@
+name: Low-feed alert emails
+
+on:
+  schedule:
+    # 10:00 UTC is 6am in Barbados (UTC-4, no daylight saving) — before the
+    # day's feed order would go in. Adjust if the farm is elsewhere.
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Print what would be sent, without sending'
+        type: boolean
+        default: true
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Standard library only — nothing to install.
+      - name: Check feed and send alerts
+        working-directory: backend/alerts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python feed_alerts.py ${{ inputs.dry_run && '--dry-run' || '' }}

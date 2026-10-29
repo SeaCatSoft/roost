@@ -50,11 +50,10 @@ async function boot() {
   state.readOnly = !canEdit(role);
   state.isOwner = role === 'owner';
 
-  // feed_alert_days arrives with 027; fall back so the store still works
-  // before it has been run.
-  let { data: farms, error: farmsError } = await db.from('farms')
-    .select('id, name, feed_alert_days').order('id').limit(1);
-  if (farmsError) ({ data: farms } = await db.from('farms').select('id, name').order('id').limit(1));
+  // '*' rather than a column list: feed_alert_days (027) and
+  // feed_alert_email (028) may not exist yet, and each part of the screen
+  // that needs one simply stays hidden until it does.
+  const { data: farms } = await db.from('farms').select('*').order('id').limit(1);
   if (!farms || !farms.length) { showError('No farm is linked to this account yet.'); return; }
   state.farm = farms[0];
   $('farmName').textContent = state.farm.name;
@@ -207,7 +206,33 @@ function renderAlertSetting() {
       `A ration is flagged low when the bags left, at the last week's average use, ` +
       `will not last ${days} day${days === 1 ? '' : 's'}. The farm owner sets this.`;
   }
+
+  const email = state.farm.feed_alert_email;
+  $('emailRow').hidden = !state.isOwner || email == null;
+  if (email != null) $('alertEmail').checked = email;
+  renderLastEmail();
 }
+
+async function renderLastEmail() {
+  const el = $('lastEmail');
+  el.textContent = '';
+  if (!state.isOwner || state.farm.feed_alert_email == null) return;
+  const { data } = await db.from('feed_alert_emails')
+    .select('sent_on, phase, level').eq('farm_id', state.farm.id)
+    .order('created_at', { ascending: false }).limit(1);
+  el.textContent = data && data.length
+    ? `Last emailed ${shortDate(data[0].sent_on)}: ${data[0].phase.toLowerCase()} ${data[0].level}.`
+    : 'No alert emailed yet.';
+}
+
+$('alertEmail').addEventListener('change', async () => {
+  showError(null); showOk(null);
+  const on = $('alertEmail').checked;
+  const { error } = await db.from('farms').update({ feed_alert_email: on }).eq('id', state.farm.id);
+  if (error) { $('alertEmail').checked = !on; showError(error.message); return; }
+  state.farm.feed_alert_email = on;
+  showOk(on ? 'Owners will be emailed when feed runs low.' : 'Low-feed emails are off. The alerts still show in the app.');
+});
 
 $('alertBtn').addEventListener('click', async () => {
   showError(null); showOk(null);

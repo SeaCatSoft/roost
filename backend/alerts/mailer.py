@@ -7,6 +7,7 @@ neither job has anything to install.
 
 import json
 import smtplib
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -29,9 +30,18 @@ class Db:
         data = json.dumps(body).encode() if body is not None else None
         req = urllib.request.Request(self.base + path, data=data, method=method,
                                      headers={**self.headers, **(extra or {})})
-        with urllib.request.urlopen(req, timeout=30) as r:
-            raw = r.read()
-            return json.loads(raw) if raw else None
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                raw = r.read()
+                return json.loads(raw) if raw else None
+        except urllib.error.HTTPError as err:
+            # Supabase says exactly what is wrong in the body ("column ... does
+            # not exist" is nearly always a migration not yet run). A bare
+            # "400 Bad Request" in the log says nothing.
+            detail = err.read().decode(errors="replace")
+            hint = ("\nThis usually means a migration has not been run — check "
+                    "backend/migrations/check_all.sql." if "does not exist" in detail else "")
+            raise SystemExit(f"Supabase refused {method} {path.split('?')[0]}: {err.code} {detail}{hint}")
 
     def get(self, table, params=None, **kw):
         """params as a list of pairs when a column is filtered twice

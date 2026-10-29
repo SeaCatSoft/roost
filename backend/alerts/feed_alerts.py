@@ -30,7 +30,7 @@ import sys
 from datetime import date
 from email.message import EmailMessage
 
-from mailer import DEFAULT_APP_URL, Db, gmail, mark_high_priority
+from mailer import DEFAULT_APP_URL, Db, allowed_farms, gmail, mark_high_priority
 
 REMIND_EVERY_DAYS = 2
 
@@ -105,7 +105,8 @@ def main():
     app_url = os.environ.get("APP_URL") or DEFAULT_APP_URL
     today = date.today()
 
-    farms = db.get("farms", select="id,name,feed_alert_days", feed_alert_email="is.true")
+    farms = allowed_farms(db.get("farms", select="id,name,feed_alert_days", feed_alert_email="is.true"),
+                          dry=dry)
     outbox = []
 
     for farm in farms:

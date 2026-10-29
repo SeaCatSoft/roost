@@ -6,6 +6,7 @@ neither job has anything to install.
 """
 
 import json
+import os
 import smtplib
 import urllib.error
 import urllib.parse
@@ -54,6 +55,25 @@ class Db:
 
     def insert(self, table, rows):
         return self._req("POST", table, rows, {"Prefer": "return=minimal"})
+
+
+def allowed_farms(farms, dry=False):
+    """Only farms named in EMAIL_FARM_IDS are ever emailed — set in the
+    workflow files. Roost is multi-farm, and every email goes out from the
+    farm operator's own Gmail, so another farm signing up must never start
+    receiving mail from that address by default. Unset means nobody: a
+    missing setting fails closed, never open."""
+    raw = os.environ.get("EMAIL_FARM_IDS", "")
+    ids = {int(x) for x in raw.replace(" ", "").split(",") if x.isdigit()}
+    keep = []
+    for f in farms:
+        if f["id"] in ids:
+            keep.append(f)
+        elif dry:
+            print(f"(skipping {f['name']}, farm id {f['id']} — not in EMAIL_FARM_IDS)")
+    if not ids:
+        print("EMAIL_FARM_IDS is not set, so no farm will be emailed.")
+    return keep
 
 
 def mark_high_priority(msg):

@@ -28,7 +28,7 @@ import sys
 from datetime import date, timedelta
 from email.message import EmailMessage
 
-from mailer import DEFAULT_APP_URL, Db, gmail
+from mailer import DEFAULT_APP_URL, Db, allowed_farms, gmail
 
 LABELS = {
     "chicks": "Chicks", "feed": "Feed", "bedding": "Bedding", "medication": "Medication",
@@ -207,9 +207,14 @@ def sections(r):
         rows.append(("Total so far", f"{money(spent)} of {money(plan)}"))
         note = ("Actual so far against the planner's figure for the whole cycle. Processing and the "
                 "last of the feed land near the end, so a cycle normally sits under plan until then.")
-        if c["pnl"]:
+        # No revenue means the planner has no sale prices for this cycle —
+        # quoting its "profit" would present the whole cost as a loss.
+        if c["pnl"] and float(c["pnl"]["revenue"] or 0) > 0:
             note += (f" The planner expects this cycle to finish at {money(c['pnl']['operating_profit'])} "
                      f"({money(c['pnl']['revenue'])} in, {money(c['pnl']['total_cost'])} out).")
+        elif c["pnl"]:
+            note += (" The planner has no sale prices for this cycle yet, so there is no profit "
+                     "estimate — set them in Assumptions.")
         out.append(("cycle", f"Cycle costs — {r['cycle']['label']}", rows, note))
 
     f = r["flock"]
@@ -492,7 +497,8 @@ def main():
 
     db = Db(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
     app_url = os.environ.get("APP_URL") or DEFAULT_APP_URL
-    farms = db.get("farms", select="id,name,feed_alert_days", weekly_report_email="is.true")
+    farms = allowed_farms(db.get("farms", select="id,name,feed_alert_days", weekly_report_email="is.true"),
+                          dry=dry)
 
     outbox = []
     for farm in farms:

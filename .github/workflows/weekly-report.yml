@@ -1,0 +1,34 @@
+name: Weekly report
+
+on:
+  schedule:
+    # Mondays 10:00 UTC — 6am in Barbados (UTC-4). Covers the Monday–Sunday
+    # just ended.
+    - cron: '0 10 * * 1'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'dry-run prints it; only-me emails just the sending address; send emails all owners'
+        type: choice
+        options: [dry-run, only-me, send]
+        default: dry-run
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Standard library only — nothing to install.
+      - name: Build and send the report
+        working-directory: backend/alerts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python weekly_report.py ${{ (inputs.mode == 'dry-run' && '--dry-run') || (inputs.mode == 'only-me' && '--only-me') || '' }}

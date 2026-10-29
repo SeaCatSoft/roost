@@ -764,6 +764,55 @@ body { background: var(--page); }
 .age-row__fill { display: block; height: 100%; border-radius: var(--r-pill); background: var(--accent); }
 .age-row__fill.is-late { background: var(--warn); }
 .age-row__val { font-size: .8125rem; text-align: right; }
+/* ---------- Cost charts ----------
+   One fixed colour per cost category, in the validated categorical order
+   (dataviz reference palette) — a category keeps its colour on every chart
+   and in the weekly email. Dark steps are their own, not a flip. */
+:root {
+  --cat-chicks: #2a78d6; --cat-feed: #eb6834; --cat-bedding: #1baf7a; --cat-medication: #eda100;
+  --cat-utilities: #e87ba4; --cat-labour: #008300; --cat-processing: #6250d6; --cat-misc: #e34948;
+  --chart-grid: #e1e0d9; --chart-axis: #c3c2b7; --chart-plan: #1d1d1f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --cat-chicks: #3987e5; --cat-feed: #d95926; --cat-bedding: #199e70; --cat-medication: #c98500;
+    --cat-utilities: #d55181; --cat-labour: #008300; --cat-processing: #9085e9; --cat-misc: #e66767;
+    --chart-grid: #2c2c2a; --chart-axis: #383835; --chart-plan: #f5f5f7;
+  }
+}
+:root[data-theme="dark"] {
+  --cat-chicks: #3987e5; --cat-feed: #d95926; --cat-bedding: #199e70; --cat-medication: #c98500;
+  --cat-utilities: #d55181; --cat-labour: #008300; --cat-processing: #9085e9; --cat-misc: #e66767;
+  --chart-grid: #2c2c2a; --chart-axis: #383835; --chart-plan: #f5f5f7;
+}
+
+.cost-hero { display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+.cost-hero__v { font-size: 2rem; font-weight: 700; letter-spacing: -.02em; }
+.cost-hero__of { font-size: .95rem; color: var(--ink-3); }
+
+.chart-legend { display: flex; flex-wrap: wrap; gap: .35rem .9rem; margin: .75rem 0 .5rem; font-size: .78rem; color: var(--ink-2); }
+.chart-legend__item { display: inline-flex; align-items: center; gap: .35rem; }
+.chart-legend__chip { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.chart-legend__val { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+.chart-wrap { position: relative; }
+.chart-wrap svg { width: 100%; height: auto; display: block; overflow: visible; }
+.chart-tip {
+  position: absolute; pointer-events: none; z-index: 5;
+  background: var(--page-2); color: var(--ink);
+  border: 1px solid var(--hairline); border-radius: 10px; box-shadow: var(--shadow-2);
+  padding: .5rem .65rem; font-size: .78rem; line-height: 1.45; min-width: 9rem;
+  opacity: 0; transform: translateY(4px);
+  transition: opacity .12s var(--ease-out), transform .12s var(--ease-out);
+}
+.chart-tip.is-on { opacity: 1; transform: none; }
+.chart-tip__title { font-weight: 600; margin-bottom: .2rem; }
+.chart-tip__row { display: flex; align-items: center; gap: .4rem; }
+.chart-tip__row span:last-child { margin-left: auto; padding-left: .75rem; font-variant-numeric: tabular-nums; }
+.chart-hit { fill: transparent; cursor: default; }
+.chart-hit:hover + .chart-hl, .chart-hl.is-on { opacity: 1; }
+.chart-hl { opacity: 0; fill: var(--ink); fill-opacity: .05; pointer-events: none; }
+
 .age-row--removable { grid-template-columns: 56px 1fr auto auto; padding-block: .3rem; }
 
 .inv-state {

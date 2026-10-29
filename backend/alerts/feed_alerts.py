@@ -25,46 +25,14 @@ Environment:
   --dry-run   print what would be sent, send nothing, log nothing.
 """
 
-import json
 import os
-import smtplib
 import sys
-import urllib.parse
-import urllib.request
 from datetime import date
 from email.message import EmailMessage
 
+from mailer import DEFAULT_APP_URL, Db, gmail, mark_high_priority
+
 REMIND_EVERY_DAYS = 2
-DEFAULT_APP_URL = "https://seacatsoft.github.io/roost/app/"
-
-
-# ---------- Supabase, over plain HTTP ------------------------------------------
-class Db:
-    def __init__(self, url, key):
-        self.base = url.rstrip("/") + "/rest/v1/"
-        self.headers = {
-            "apikey": key,
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        }
-
-    def _req(self, method, path, body=None, extra=None):
-        data = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request(self.base + path, data=data, method=method,
-                                     headers={**self.headers, **(extra or {})})
-        with urllib.request.urlopen(req, timeout=30) as r:
-            raw = r.read()
-            return json.loads(raw) if raw else None
-
-    def get(self, table, **params):
-        return self._req("GET", f"{table}?{urllib.parse.urlencode(params)}")
-
-    def rpc(self, fn, **args):
-        return self._req("POST", f"rpc/{fn}", args)
-
-    def insert(self, table, rows):
-        return self._req("POST", table, rows, {"Prefer": "return=minimal"})
-
 
 # ---------- Deciding what to send ------------------------------------------------
 def should_send(alert, last, today):
@@ -125,12 +93,7 @@ def build_message(sender, recipients, farm, alerts, app_url):
     # Owners in Bcc, so no owner's address is shown to another.
     msg["Bcc"] = ", ".join(recipients)
     msg["Subject"] = subject_for(farm["name"], alerts)
-    # High priority. Three headers because mail apps never agreed on one:
-    # X-Priority for most, Importance for Outlook, X-MSMail-Priority for
-    # older Outlook. Gmail ignores all three and decides "important" itself.
-    msg["X-Priority"] = "1 (Highest)"
-    msg["Importance"] = "High"
-    msg["X-MSMail-Priority"] = "High"
+    mark_high_priority(msg)
     msg.set_content(body_for(farm, alerts, app_url))
     return msg
 
@@ -184,8 +147,7 @@ def main():
         return
 
     user, password = os.environ["GMAIL_USER"], os.environ["GMAIL_APP_PASSWORD"]
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as smtp:
-        smtp.login(user, password)
+    with gmail(user, password) as smtp:
         for farm, alerts, recipients in outbox:
             smtp.send_message(build_message(user, recipients, farm, alerts, app_url))
 

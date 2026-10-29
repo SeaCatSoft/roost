@@ -30,4 +30,7 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          # Only these farms are ever emailed (1 = Goddard's Farm). Comma-
+          # separated; any other farm in the database is skipped.
+          EMAIL_FARM_IDS: '1'
         run: python feed_alerts.py ${{ inputs.dry_run && '--dry-run' || '' }}

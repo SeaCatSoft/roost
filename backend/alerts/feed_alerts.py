@@ -118,6 +118,23 @@ def body_for(farm, alerts, app_url):
     )
 
 
+def build_message(sender, recipients, farm, alerts, app_url):
+    msg = EmailMessage()
+    msg["From"] = f"Roost <{sender}>"
+    msg["To"] = sender
+    # Owners in Bcc, so no owner's address is shown to another.
+    msg["Bcc"] = ", ".join(recipients)
+    msg["Subject"] = subject_for(farm["name"], alerts)
+    # High priority. Three headers because mail apps never agreed on one:
+    # X-Priority for most, Importance for Outlook, X-MSMail-Priority for
+    # older Outlook. Gmail ignores all three and decides "important" itself.
+    msg["X-Priority"] = "1 (Highest)"
+    msg["Importance"] = "High"
+    msg["X-MSMail-Priority"] = "High"
+    msg.set_content(body_for(farm, alerts, app_url))
+    return msg
+
+
 # ---------- Run ------------------------------------------------------------------
 def main():
     dry = "--dry-run" in sys.argv
@@ -170,14 +187,7 @@ def main():
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as smtp:
         smtp.login(user, password)
         for farm, alerts, recipients in outbox:
-            msg = EmailMessage()
-            msg["From"] = f"Roost <{user}>"
-            msg["To"] = user
-            # Owners in Bcc, so no owner's address is shown to another.
-            msg["Bcc"] = ", ".join(recipients)
-            msg["Subject"] = subject_for(farm["name"], alerts)
-            msg.set_content(body_for(farm, alerts, app_url))
-            smtp.send_message(msg)
+            smtp.send_message(build_message(user, recipients, farm, alerts, app_url))
 
             # Logged only after a successful send, so a failed run is retried
             # tomorrow rather than silently marked as done.

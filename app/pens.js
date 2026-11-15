@@ -191,13 +191,20 @@ function renderPens() {
       if (!p.cycle_id && state.pens.length > 1) {
         actions.appendChild(confirmButton('Remove', 'Remove it?', async () => {
           showError(null); showOk(null);
-          const q = Number(p.cycles_total) > 0
-            ? db.from('houses').update({ active: false }).eq('id', p.house_id)
-            : db.from('houses').delete().eq('id', p.house_id);
-          const { error } = await q;
+          const retire = () => db.from('houses').update({ active: false }).eq('id', p.house_id);
+          let retired = Number(p.cycles_total) > 0;
+          let { error } = retired
+            ? await retire()
+            : await db.from('houses').delete().eq('id', p.house_id);
+          // A pen with feed deliveries or transfers on record cannot be
+          // deleted (031) — the records must outlive it — so it is retired.
+          if (error && error.code === '23503') {
+            retired = true;
+            ({ error } = await retire());
+          }
           if (error) { showError(error.message); await boot(); return; }
-          showOk(Number(p.cycles_total) > 0
-            ? `${p.name} retired. Its past flocks are still in Batches.`
+          showOk(retired
+            ? `${p.name} retired. Its records are kept.`
             : `${p.name} removed.`);
           await boot();
         }));

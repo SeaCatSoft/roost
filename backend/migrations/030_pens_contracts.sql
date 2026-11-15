@@ -22,7 +22,7 @@
 --
 -- This migration records the pens and the terms. Settling a contract flock
 -- (the pickup, the deductions, the payout) and keeping a buyer's feed apart
--- from the farm's own store build on it in 031.
+-- from the farm's own store build on it in later migrations.
 -- =============================================================================
 
 

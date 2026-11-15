@@ -904,3 +904,20 @@ button.pen-row:hover { background: color-mix(in srgb, var(--ink) 5%, transparent
 }
 
 [hidden] { display: none !important; }
+
+/* ---------- Feed store: every pen's store at a glance ---------- */
+.store-table { display: grid; gap: 2px; }
+.store-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) repeat(3, 3.1rem); gap: .3rem;
+  align-items: center; width: 100%; padding: .6rem .75rem;
+  border: 0; border-radius: var(--r-md, 12px); background: none;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+  transition: background-color .18s var(--ease-out);
+}
+.store-row > span:not(:first-child) { text-align: right; }
+.store-row > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: .9375rem; }
+.store-row:hover:not(.store-row--head) { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.store-row.is-current { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.store-row--head { cursor: default; padding-block: .15rem; font-size: .72rem; color: var(--ink-3); }
+.store-row--head > span:first-child { font-weight: 400; font-size: .72rem; }
+.store-row__sub { display: block; font-weight: 400; font-size: .75rem; color: var(--ink-3); }

@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Roost — migration audit
 --
--- Not a migration. Checks which of 001-030 have actually been applied, by
+-- Not a migration. Checks which of 001-031 have actually been applied, by
 -- looking for one distinctive object each creates. Run this any time you are
 -- unsure what state the database is in.
 --
@@ -80,6 +80,11 @@ select * from (values
                                         where table_name='cost_lines' and column_name='bedding_kind')),
   ('030_pens_contracts',       to_regclass('public.pen_contracts') is not null
                            and to_regclass('public.v_pens') is not null
-                           and to_regprocedure('public.end_pen_contract(bigint)') is not null)
+                           and to_regprocedure('public.end_pen_contract(bigint)') is not null),
+  ('031_pen_feed_stores',      to_regclass('public.feed_transfers') is not null
+                           and exists (select 1 from information_schema.columns
+                                        where table_name='v_feed_stock' and column_name='house_id')
+                           and exists (select 1 from information_schema.columns
+                                        where table_name='feed_alert_emails' and column_name='house_id'))
 ) as t(migration, applied)
 order by migration;

@@ -61,23 +61,37 @@
       </p>
     </section>
 
+    <!-- ===== Every pen's store at a glance (two pens or more) ===== -->
+    <section class="panel" id="wherePanel" style="margin-top:1.25rem" hidden>
+      <h2 class="panel__title">Where the feed is</h2>
+      <p class="caption" style="margin-top:.25rem;margin-bottom:.75rem">
+        Bags on hand in each pen's store. Tap a pen to open its store.
+      </p>
+      <div id="whereRows" class="store-table"></div>
+    </section>
+
     <details class="rolebox" style="margin-top:1.25rem">
       <summary>On hand, still needed, to buy — what they mean</summary>
       <div class="rolebox__body">
         <p><strong>On hand</strong> — bags that should be in the store right now.</p>
         <p><strong>Still needed</strong> — bags the open cycle's feed plan says it will still open, of that ration, before it ends.</p>
         <p><strong>To buy</strong> — still needed, less on hand. Zero means you are covered for this cycle.</p>
+        <p><strong>Each pen has its own store.</strong> A delivery goes to one pen, a bag opened comes out of the store of the pen that flock is in, and moving feed takes bags out of one pen's store and puts them in another's.</p>
         <p class="caption">A count is the store at the end of its day: deliveries and bags opened that same day are treated as already in it. Count after the day's work is done.</p>
       </div>
     </details>
 
     <section style="margin-top:1.5rem">
+      <div id="storeHead" hidden style="margin-bottom:.75rem">
+        <h2 class="panel__title" id="storeTitle"></h2>
+        <p class="caption" id="storeMeta" style="margin-top:.15rem"></p>
+      </div>
       <div id="list"><p class="caption">Loading…</p></div>
     </section>
 
     <!-- ===== Delivery ===== -->
     <section class="panel" id="deliveryPanel" style="margin-top:1.75rem" hidden>
-      <h2 class="panel__title">Log a delivery</h2>
+      <h2 class="panel__title" id="deliveryTitle">Log a delivery</h2>
       <p class="caption" style="margin-top:.25rem;margin-bottom:1rem">
         Each load of feed that arrives. The price is kept, so the cost of a
         cycle's feed can be checked later against what was paid.
@@ -128,7 +142,7 @@
 
     <!-- ===== Count ===== -->
     <section class="panel" id="countPanel" hidden>
-      <h2 class="panel__title">Count the store</h2>
+      <h2 class="panel__title" id="countTitle">Count the store</h2>
       <p class="caption" style="margin-top:.25rem;margin-bottom:1rem">
         Unopened bags of each ration. Leave a box empty to keep that ration's
         last count. Counting the same day twice replaces the first count.
@@ -155,6 +169,51 @@
 
       <button class="btn btn--primary" type="button" id="countBtn" data-press
               style="width:100%;min-height:46px;margin-top:1rem">Save count</button>
+    </section>
+
+    <!-- ===== Transfer ===== -->
+    <section class="panel" id="transferPanel" hidden>
+      <h2 class="panel__title">Move feed between pens</h2>
+      <p class="caption" style="margin-top:.25rem;margin-bottom:1rem">
+        Bags carried from one pen's store to another's. They leave the first
+        and arrive in the second on the same day, so no feed is gained or lost.
+      </p>
+
+      <div class="setting-grid">
+        <label class="setting">
+          <span class="setting__label">Ration</span>
+          <span class="setting__input">
+            <select id="tPhase">
+              <option>Starter</option><option>Grower</option><option>Finisher</option>
+            </select>
+          </span>
+        </label>
+        <label class="setting">
+          <span class="setting__label">Bags</span>
+          <span class="setting__input"><input id="tBags" type="number" inputmode="numeric" min="1" step="1"></span>
+        </label>
+        <label class="setting">
+          <span class="setting__label">From</span>
+          <span class="setting__input"><select id="tFrom"></select></span>
+        </label>
+        <label class="setting">
+          <span class="setting__label">To</span>
+          <span class="setting__input"><select id="tTo"></select></span>
+        </label>
+        <label class="setting">
+          <span class="setting__label">Date</span>
+          <span class="setting__input"><input id="tDate" type="date"></span>
+        </label>
+      </div>
+      <p class="caption" id="tHint" style="margin-top:.75rem"></p>
+
+      <div class="field" style="margin-top:.75rem">
+        <label for="tNotes">Note</label>
+        <input id="tNotes" type="text" placeholder="Optional, e.g. to be returned" maxlength="200">
+      </div>
+
+      <button class="btn btn--primary" type="button" id="transferBtn" data-press
+              style="width:100%;min-height:46px;margin-top:.5rem">Move feed</button>
     </section>
 
     <!-- ===== Alert window ===== -->
@@ -193,7 +252,7 @@
     </section>
 
     <section style="margin-top:1.75rem" id="recentSection" hidden>
-      <h2 class="panel__title" style="margin-bottom:.75rem">Recent deliveries and counts</h2>
+      <h2 class="panel__title" style="margin-bottom:.75rem" id="recentTitle">Recent deliveries and counts</h2>
       <div id="recentList"></div>
     </section>
 

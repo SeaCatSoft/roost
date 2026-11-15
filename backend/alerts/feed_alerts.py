@@ -47,27 +47,48 @@ def num(n, d=0):
     return f"{float(n):,.{d}f}"
 
 
+def several_stores(alerts):
+    """From 031 each pen has its own store and the rows say which. With one
+    store on the farm, naming the pen would only be noise."""
+    return len({a["house_id"] for a in alerts
+                if a.get("house_id") is not None and a.get("pen_active") is not False}) > 1
+
+
+def what(a):
+    """'grower', or 'Pen 2 grower' on a farm with more than one store.
+    main() blanks pen_name when the farm has a single store."""
+    name = a["phase"].lower()
+    return f"{a['pen_name']} {name}" if a.get("pen_name") else name
+
+
 def line_for(a):
     """Same wording as alertText() in app/feedalerts.js."""
     name = a["phase"].lower()
     rate = f"{num(a['bags_per_day'], 1)} bags a day"
+    if a.get("pen_name"):
+        pen = a["pen_name"]
+        if a["level"] == "out":
+            return f"{pen}: out of {name}. Its store should be empty, and the flock is using about {rate}."
+        return f"{pen}: {name} runs out {when_for(a)}: {num(a['on_hand'])} bags left at {rate}."
     if a["level"] == "out":
         return f"Out of {name}. The store should be empty, and the flock is using about {rate}."
+    return f"{a['phase']} runs out {when_for(a)}: {num(a['on_hand'])} bags left at {rate}."
+
+
+def when_for(a):
     days = float(a["days_left"])
     if days < 1:
-        when = "within a day"
-    else:
-        runs_out = date.fromisoformat(a["runs_out_on"]).strftime("%a %d %b")
-        when = f"in about {num(days, 1 if days < 3 else 0)} days ({runs_out})"
-    return f"{a['phase']} runs out {when}: {num(a['on_hand'])} bags left at {rate}."
+        return "within a day"
+    runs_out = date.fromisoformat(a["runs_out_on"]).strftime("%a %d %b")
+    return f"in about {num(days, 1 if days < 3 else 0)} days ({runs_out})"
 
 
 def subject_for(farm_name, alerts):
-    outs = [a["phase"].lower() for a in alerts if a["level"] == "out"]
+    outs = [what(a) for a in alerts if a["level"] == "out"]
     if outs:
         return f"{farm_name}: out of {' and '.join(outs)}"
     soonest = min(alerts, key=lambda a: float(a["days_left"]))
-    return f"{farm_name}: {soonest['phase'].lower()} feed is running low"
+    return f"{farm_name}: {what(soonest)} feed is running low"
 
 
 def body_for(farm, alerts, app_url):
@@ -110,16 +131,30 @@ def main():
     outbox = []
 
     for farm in farms:
-        alerts = db.get("v_feed_alerts", select="*", farm_id=f"eq.{farm['id']}",
-                        level="in.(low,out)")
+        # Every store on the farm, so the wording can tell one store from
+        # several; only the low and out ones are written about.
+        stores = db.get("v_feed_alerts", select="*", farm_id=f"eq.{farm['id']}")
+        named = several_stores(stores)
+        alerts = [a for a in stores if a["level"] in ("low", "out")]
         if not alerts:
             continue
+        if not named:
+            for a in alerts:
+                a["pen_name"] = None
 
         due = []
         for a in alerts:
+            # Per pen once the stores are per pen (031): grower already
+            # reported in one pen must not silence grower in another. Emails
+            # sent before 031 carry no pen and count for the farm's first
+            # pen, which is where 031 put the store they were about.
+            mine = {"farm_id": f"eq.{farm['id']}", "phase": f"eq.{a['phase']}"}
+            if named:
+                first = min(s["house_id"] for s in stores)
+                mine["or"] = (f"(house_id.eq.{a['house_id']},house_id.is.null)"
+                              if a["house_id"] == first else f"(house_id.eq.{a['house_id']})")
             last = db.get("feed_alert_emails", select="level,sent_on",
-                          farm_id=f"eq.{farm['id']}", phase=f"eq.{a['phase']}",
-                          order="created_at.desc", limit="1")
+                          order="created_at.desc", limit="1", **mine)
             if should_send(a, last[0] if last else None, today):
                 due.append(a)
         if not due:
@@ -158,9 +193,11 @@ def main():
                 "farm_id": farm["id"], "phase": a["phase"], "level": a["level"],
                 "days_left": a["days_left"], "on_hand": a["on_hand"],
                 "recipients": len(recipients),
+                # Only once 031 has given the log its pen column.
+                **({"house_id": a["house_id"]} if a.get("house_id") is not None else {}),
             } for a in alerts])
             print(f"{farm['name']}: emailed {len(recipients)} owner(s) about "
-                  f"{', '.join(a['phase'].lower() for a in alerts)}.")
+                  f"{', '.join(what(a) for a in alerts)}.")
 
 
 if __name__ == "__main__":

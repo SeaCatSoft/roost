@@ -152,16 +152,30 @@ def gather(db, farm, start, end):
         }
 
     # ---- Feed store
-    alerts = db.get("v_feed_alerts", select="phase,on_hand,bags_per_day,days_left,level",
-                    farm_id=f"eq.{fid}")
+    # One row per ration, or per pen per ration once each pen has its own
+    # store (031). Bags used this week are counted for the whole farm and
+    # matched to the store they came out of — the pen the flock is in.
+    alerts = db.get("v_feed_alerts", select="*", farm_id=f"eq.{fid}")
+    per_pen = bool(alerts) and alerts[0].get("house_id") is not None
+    # A retired pen's store only matters while there is still feed in it.
+    alerts = [a for a in alerts
+              if a.get("pen_active") is not False or float(a["on_hand"] or 0) > 0]
+    named = len({a.get("house_id") for a in alerts}) > 1
+
     week_open = {}
-    if cycle:
-        for o in db.get("feed_bag_openings", between("opened_on", start, end),
-                        select="phase", cycle_id=f"eq.{cycle['id']}"):
-            week_open[o["phase"]] = week_open.get(o["phase"], 0) + 1
+    for o in db.get("feed_bag_openings", between("opened_on", start, end),
+                    select="phase,cycles!inner(farm_id,house_id)",
+                    **{"cycles.farm_id": f"eq.{fid}"}):
+        key = (o["cycles"]["house_id"] if per_pen else None, o["phase"])
+        week_open[key] = week_open.get(key, 0) + 1
+
     order = {"Starter": 0, "Grower": 1, "Finisher": 2}
-    r["feed"] = sorted([dict(a, used=week_open.get(a["phase"], 0)) for a in alerts],
-                       key=lambda a: order.get(a["phase"], 9))
+    r["feed"] = sorted(
+        [dict(a, used=week_open.get((a.get("house_id") if per_pen else None, a["phase"]), 0),
+              label=f"{a['pen_name']} · {a['phase']}" if named else a["phase"])
+         for a in alerts],
+        key=lambda a: (a.get("house_id") or 0, order.get(a["phase"], 9)))
+    r["feed_named"] = named
 
     # ---- Money in
     raised = db.get("v_invoices", between("issued_on", start, end),
@@ -240,13 +254,13 @@ def sections(r):
         if a["level"] == "idle" and a["used"] == 0 and float(a["on_hand"] or 0) <= 0:
             continue
         if a["level"] == "uncounted":
-            feed_rows.append((a["phase"], "store not counted yet"))
+            feed_rows.append((a["label"], "store not counted yet"))
             continue
         bits = [f"{num(a['on_hand'])} bags", f"{num(a['used'])} used this week"]
         if a["days_left"] is not None and a["level"] in ("ok", "low", "out"):
             bits.append(f"{num(a['days_left'], 0)} days left")
         flag = {"low": "  ▲ low", "out": "  ▲ out"}.get(a["level"], "")
-        feed_rows.append((a["phase"], " · ".join(bits) + flag))
+        feed_rows.append((a["label"], " · ".join(bits) + flag))
     if feed_rows:
         out.append(("feed", "Feed store", feed_rows, None))
 
@@ -380,6 +394,7 @@ def chart_flock(r):
 
 def chart_feed(r):
     window = float(r["farm"].get("feed_alert_days") or 7)
+    label_w = 130 if r.get("feed_named") else 70   # room for "Pen 2 · Grower"
     out = []
     for a in r["feed"]:
         if a["level"] not in ("ok", "low", "out") or a["days_left"] is None:
@@ -388,7 +403,7 @@ def chart_feed(r):
         pct = min(days / (window * 2), 1) * 100   # the track is two warning windows long
         col = {"ok": GOOD, "low": WARNING, "out": CRITICAL}[a["level"]]
         out.append(
-            f'<tr><td style="width:70px;font-size:12px;color:{INK2};padding:4px 0">{e(a["phase"])}</td>'
+            f'<tr><td style="width:{label_w}px;font-size:12px;color:{INK2};padding:4px 0">{e(a["label"])}</td>'
             f'<td style="padding:4px 8px">' + _table(
                 f'<tr><td style="width:50%">{_bar([(min(pct * 2, 100), col)], 8)}</td>'
                 f'<td width="2" style="width:2px"><div style="width:2px;height:14px;background:{INK3};font-size:0;line-height:0">&nbsp;</div></td>'

@@ -65,7 +65,7 @@
     <!-- ===== A cycle is already running ===== -->
     <section id="existingStep" hidden>
       <div class="cycle-head">
-        <p class="caption">You already have a cycle running</p>
+        <p class="caption" id="existingCaption">You already have a cycle running</p>
         <h1 class="title" style="margin-block:.4rem .5rem" id="existingTitle">Cycle 12</h1>
         <p class="caption" id="existingMeta"></p>
       </div>
@@ -97,6 +97,12 @@
       </div>
 
       <div class="panel">
+        <div class="field" id="penField" hidden>
+          <label for="penSelect">Pen</label>
+          <select id="penSelect"></select>
+          <span class="field__hint" id="penHint"></span>
+        </div>
+
         <div class="field">
           <label for="labelInput">Name</label>
           <input id="labelInput" type="text" required>

@@ -15,7 +15,8 @@
    ========================================================================== */
 
 import {
-  db, isConfigured, $, today, daysBetween, banner, myRole, standardWeightAt
+  db, isConfigured, $, today, daysBetween, banner, myRole, standardWeightAt,
+  loadPens, currentPen, selectPen, mountPenSwitcher, contractPriceText
 } from './db.js';
 import { loadFeedAlerts, renderFeedAlerts } from './feedalerts.js';
 
@@ -74,12 +75,22 @@ async function boot() {
   renderForecastOptIn();
   loadFeedAlerts(state.farm.id).then((rows) => renderFeedAlerts($('feedAlerts'), rows));
 
+  // Pens first (030): they decide which flock the panels below describe.
+  // null means 030 has not been run, and the page behaves as it always did.
+  const pens = await loadPens();
+  const pen = currentPen(pens);
+  renderPens(pens);
+  if (pen) mountPenSwitcher(pens, pen.house_id);
+
+  let cycleQuery = db.from('cycles').select('id, label, placed_on, birds_placed, target_sale_age, closed_at');
+  cycleQuery = pen ? cycleQuery.eq('id', pen.cycle_id)
+                   : cycleQuery.order('placed_on', { ascending: false }).limit(1);
+
   const [ageing, balances, unsent, cycles, book] = await Promise.all([
     db.from('v_invoice_ageing').select('*').maybeSingle(),
     db.from('v_customer_balances').select('*'),
     db.from('v_unsent_invoices').select('*').order('issued_on', { ascending: false }),
-    db.from('cycles').select('id, label, placed_on, birds_placed, target_sale_age, closed_at')
-      .order('placed_on', { ascending: false }).limit(1),
+    cycleQuery,
     db.from('v_order_book').select('*').maybeSingle()
   ]);
 
@@ -100,6 +111,53 @@ async function boot() {
   }
 
   await Promise.all([renderActual(), renderForecast()]);
+}
+
+/* ---------- Pens ---------------------------------------------------------- */
+/* One line per pen: what is in it, and whose it is. Tapping a pen with a
+   flock makes it the one the rest of this page — and every flock screen —
+   is about. Adding pens and contract terms live on the Pens screen. */
+function renderPens(pens) {
+  const panel = $('pensPanel');
+  if (!pens) { panel.hidden = true; return; }
+  panel.hidden = false;
+
+  const wrap = $('pensRows');
+  wrap.textContent = '';
+  const selected = currentPen(pens);
+
+  pens.forEach((p) => {
+    const row = document.createElement(p.cycle_id ? 'button' : 'div');
+    row.className = 'pen-row' + (selected && selected.house_id === p.house_id ? ' is-current' : '');
+    if (p.cycle_id) {
+      row.type = 'button';
+      row.addEventListener('click', () => { selectPen(p.house_id); window.location.reload(); });
+    }
+
+    const main = document.createElement('span');
+    main.className = 'pen-row__main';
+    const name = document.createElement('span');
+    name.className = 'pen-row__name';
+    name.textContent = p.name;
+    const meta = document.createElement('span');
+    meta.className = 'pen-row__meta';
+    if (p.cycle_id) {
+      const day = Math.max(1, daysBetween(p.placed_on, today()) + 1);
+      meta.textContent = `${p.cycle_label} · day ${Math.min(day, p.target_sale_age)} of ${p.target_sale_age} · ` +
+        `${num(p.birds_alive ?? p.birds_placed)} birds`;
+    } else {
+      meta.textContent = 'Empty';
+    }
+    main.append(name, meta);
+
+    const badge = document.createElement('span');
+    badge.className = p.contract_id ? 'pen-badge pen-badge--contract' : 'pen-badge';
+    badge.textContent = p.contract_id ? p.buyer_name : 'Your own';
+    if (p.contract_id) badge.title = contractPriceText(p);
+
+    row.append(main, badge);
+    wrap.appendChild(row);
+  });
 }
 
 /* ---------- Owed ---------------------------------------------------------- */

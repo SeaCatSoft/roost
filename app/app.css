@@ -764,6 +764,40 @@ body { background: var(--page); }
 .age-row__fill { display: block; height: 100%; border-radius: var(--r-pill); background: var(--accent); }
 .age-row__fill.is-late { background: var(--warn); }
 .age-row__val { font-size: .8125rem; text-align: right; }
+/* ---------- Pens ---------- */
+.pen-switch {
+  appearance: none; -webkit-appearance: none;
+  max-width: 9.5rem; min-height: 34px; margin-right: .4rem;
+  padding: .25rem 1.6rem .25rem .8rem;
+  border-radius: var(--r-pill); border: 0; cursor: pointer;
+  font: inherit; font-size: .8125rem; font-weight: 600; color: var(--ink);
+  text-overflow: ellipsis;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%236e6e73' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E") no-repeat right .55rem center / 12px,
+    color-mix(in srgb, var(--ink) 8%, transparent);
+}
+.pen-badge {
+  display: inline-block; padding: .12rem .5rem; border-radius: var(--r-pill);
+  font-size: .68rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+  background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink-2);
+}
+.pen-badge--contract { background: color-mix(in srgb, var(--cat-chicks) 16%, transparent); color: var(--ink); }
+.pen-row {
+  display: flex; align-items: center; gap: .75rem; width: 100%;
+  padding: .7rem .75rem; margin: 0 -.75rem; box-sizing: content-box;
+  border: 0; border-radius: var(--r-md, 12px); background: none;
+  font: inherit; color: inherit; text-align: left;
+}
+button.pen-row { cursor: pointer; transition: background-color .18s var(--ease-out); }
+button.pen-row:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.pen-row.is-current { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.pen-row__main { display: grid; gap: .1rem; min-width: 0; flex: 1; }
+.pen-row__name { font-size: .9375rem; font-weight: 600; }
+.pen-row__meta { font-size: .78rem; color: var(--ink-3); }
+.pen-terms { margin: .6rem 0 0; padding: 0; list-style: none; font-size: .8125rem; color: var(--ink-2); }
+.pen-terms li { padding: .15rem 0; }
+.pen-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .9rem; }
+
 /* ---------- Cost charts ----------
    One fixed colour per cost category, in the validated categorical order
    (dataviz reference palette) — a category keeps its colour on every chart

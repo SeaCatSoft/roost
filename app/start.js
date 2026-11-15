@@ -11,7 +11,10 @@
    is the one action here that cannot be walked back.
    ========================================================================== */
 
-import { db, isConfigured, $, today, daysBetween, banner, loadOpenCycle } from './db.js';
+import {
+  db, isConfigured, $, today, daysBetween, banner, loadOpenCycle,
+  loadPens, selectedPenId, selectPen, contractPriceText
+} from './db.js';
 
 const screens = { setup: $('setupScreen'), auth: $('authScreen'), app: $('appScreen') };
 const show = (n) => Object.entries(screens).forEach(([k, el]) => { el.hidden = k !== n; });
@@ -23,7 +26,7 @@ if (!isConfigured) { show('setup'); throw new Error('Supabase is not configured'
 const steps = { existing: $('existingStep'), form: $('formStep'), done: $('doneStep') };
 const step = (n) => Object.entries(steps).forEach(([k, el]) => { el.hidden = k !== n; });
 
-const state = { farmId: null, current: null, disposal: 'archive', assumptions: 'carry' };
+const state = { farmId: null, current: null, pen: null, pens: null, disposal: 'archive', assumptions: 'carry' };
 
 const fmt = (n) => Number(n).toLocaleString('en-US');
 
@@ -68,14 +71,38 @@ async function boot() {
   }
   state.farmId = farms[0].id;
 
-  try {
-    state.current = await loadOpenCycle();
-  } catch {
-    state.current = null;      // nothing open is a normal state, not a failure
+  // A cycle starts in one pen (030), and only the flock already in THAT pen
+  // is in its way. Before 030 there is one pen in effect, so this falls back
+  // to the farm's single open cycle.
+  state.pens = await loadPens();
+  if (state.pens && state.pens.length) {
+    const wanted = selectedPenId();
+    // Coming here to start something: prefer an empty pen unless one was asked for.
+    state.pen = state.pens.find((p) => p.house_id === wanted)
+      || state.pens.find((p) => !p.cycle_id) || state.pens[0];
+    selectPen(state.pen.house_id);
+
+    state.current = null;
+    if (state.pen.cycle_id) {
+      const { data } = await db.from('cycles')
+        .select('id, label, breed, placed_on, birds_placed, target_sale_age')
+        .eq('id', state.pen.cycle_id).maybeSingle();
+      state.current = data || null;
+    }
+    renderPenChoice();
+  } else {
+    try {
+      state.current = await loadOpenCycle();
+    } catch {
+      state.current = null;      // nothing open is a normal state, not a failure
+    }
   }
 
   if (state.current) {
     const day = Math.max(1, daysBetween(state.current.placed_on, today()) + 1);
+    if (state.pen && state.pens.length > 1) {
+      $('existingCaption').textContent = `${state.pen.name} already has a cycle running`;
+    }
     $('existingTitle').textContent = state.current.label;
     $('existingMeta').textContent =
       `Day ${day} of ${state.current.target_sale_age} · ` +
@@ -88,6 +115,30 @@ async function boot() {
     step('form');
   }
 }
+
+/* ---------- Which pen ------------------------------------------------------ */
+function renderPenChoice() {
+  const sel = $('penSelect');
+  sel.textContent = '';
+  state.pens.forEach((p) => {
+    const o = document.createElement('option');
+    o.value = p.house_id;
+    o.textContent = p.cycle_id ? `${p.name} — ${p.cycle_label} is in it` : `${p.name} — empty`;
+    o.selected = p.house_id === state.pen.house_id;
+    sel.appendChild(o);
+  });
+  $('penField').hidden = state.pens.length < 2 && !state.pen.contract_id;
+  sel.disabled = state.pens.length < 2;
+
+  // Say so up front when the flock about to be started is somebody else's.
+  $('penHint').textContent = state.pen.contract_id
+    ? `Under contract to ${state.pen.buyer_name}, at ${contractPriceText(state.pen)}. This cycle will be raised on those terms.`
+    : (state.pens.length > 1 ? 'Your own pen.' : '');
+}
+
+$('penSelect').addEventListener('change', () => {
+  window.location.href = `start.html?pen=${$('penSelect').value}`;
+});
 
 /* ---------- Choices ------------------------------------------------------- */
 $('continueBtn').addEventListener('click', () => { window.location.href = 'check.html'; });
@@ -233,6 +284,7 @@ $('createBtn').addEventListener('click', async () => {
     p_placed_on: placed,
     p_breed: breed,
     p_target_age: age,
+    p_house_id: state.pen ? state.pen.house_id : null,
     p_carry_over: state.assumptions === 'carry'
   });
 

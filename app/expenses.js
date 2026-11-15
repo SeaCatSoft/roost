@@ -12,7 +12,10 @@
    about the birds, not just the money.
    ========================================================================== */
 
-import { db, isConfigured, $, today, daysBetween, banner, myRole, canEdit } from './db.js';
+import {
+  db, isConfigured, $, today, daysBetween, banner, myRole, canEdit,
+  loadPens, currentPen, mountPenSwitcher
+} from './db.js';
 
 const screens = { setup: $('setupScreen'), auth: $('authScreen'), app: $('appScreen') };
 const show = (n) => Object.entries(screens).forEach(([k, el]) => { el.hidden = k !== n; });
@@ -61,9 +64,15 @@ async function boot() {
   // The most recent cycle, open or not — between flocks, the last one's
   // costs are still the ones worth looking at. New expenses attach only to
   // an open cycle.
-  const { data: cycles } = await db.from('cycles')
-    .select('id, label, placed_on, closed_at').order('placed_on', { ascending: false }).limit(1);
+  // With several pens (030), the costs shown are the selected pen's flock.
+  const pens = await loadPens();
+  const pen = currentPen(pens);
+  let cycleQuery = db.from('cycles').select('id, label, placed_on, closed_at');
+  cycleQuery = pen ? cycleQuery.eq('id', pen.cycle_id)
+                   : cycleQuery.order('placed_on', { ascending: false }).limit(1);
+  const { data: cycles } = await cycleQuery;
   state.cycle = cycles && cycles.length ? cycles[0] : null;
+  if (pen) mountPenSwitcher(pens, pen.house_id);
   $('cycleLabel').textContent = state.cycle
     ? `${state.cycle.label}${state.cycle.closed_at ? ' (closed)' : ''}`
     : 'No cycle yet';

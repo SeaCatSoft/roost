@@ -26,7 +26,8 @@
    ========================================================================== */
 
 import {
-  db, isConfigured, $, today, daysBetween, dateForDay, banner, myRole
+  db, isConfigured, $, today, daysBetween, dateForDay, banner, myRole,
+  loadPens, currentPen, mountPenSwitcher
 } from './db.js';
 
 const screens = {
@@ -59,11 +60,16 @@ async function boot() {
   show('app');
   showError(null);
 
-  const { data: cycles } = await db.from('cycles')
+  // With several pens (030), plan for the selected pen's flock.
+  const pens = await loadPens();
+  const pen = currentPen(pens);
+  let cycleQuery = db.from('cycles')
     .select('id, label, placed_on, birds_placed, target_sale_age')
-    .is('closed_at', null)
-    .order('placed_on', { ascending: false })
-    .limit(1);
+    .is('closed_at', null);
+  cycleQuery = pen ? cycleQuery.eq('id', pen.cycle_id)
+                   : cycleQuery.order('placed_on', { ascending: false }).limit(1);
+  const { data: cycles } = await cycleQuery;
+  if (pen) mountPenSwitcher(pens, pen.house_id);
 
   if (!cycles || !cycles.length) {
     showError('No open cycle to plan for. Start one and this fills in.');
